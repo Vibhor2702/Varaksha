@@ -36,6 +36,7 @@ security/gate-m/playground/.gate_snapshots/
 # ── Trained models (large binary files) ──────────────────────────────────────
 data/models/*.pkl
 data/models/*.faiss
+data/models/model_manifest.json
 models/
 *.pkl
 *.faiss

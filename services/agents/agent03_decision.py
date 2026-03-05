@@ -1,5 +1,5 @@
 """
-agent03_decision.py — Weighted Risk Decision + GPT-4o-mini Narrative
+agent03_decision.py — Weighted Risk Decision + Deterministic Narrative
 ======================================================================
 Aggregates scores from Agents 01 and 02 using the weighted formula from
 TEAM_RUST_BRIEF.md and produces the final ALLOW / FLAG / BLOCK verdict
@@ -9,9 +9,9 @@ Weighted formula:
     final_score = 0.35×anomaly + 0.35×graph + 0.15×velocity + 0.15×mule_hub
 
 Narrative generation:
-    GPT-4o-mini (or any OpenAI-compatible endpoint) is called with a
-    **zero-PII prompt** — only scores, patterns, and category codes go in.
-    No UPI IDs, IPs, or user-identifiable data ever leave the process.
+    Deterministic signed template — no external AI calls.
+    Only scores, patterns, and law section codes appear in the output.
+    No UPI IDs, IPs, or user-identifiable data are used.
 
 Inputs (JSON POST /v1/decide):
     CombinedContext { agent01_verdict, agent02_verdict }
@@ -30,7 +30,6 @@ import time
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 try:
@@ -50,9 +49,6 @@ log = logging.getLogger("agent03")
 
 SIGNING_KEY         = os.getenv("AGENT03_SIGNING_KEY_HEX", "")
 AGENT02_VERIFY_KEY  = os.getenv("AGENT02_VERIFYING_KEY_HEX", "")
-OPENAI_API_KEY      = os.getenv("OPENAI_API_KEY", "")
-OPENAI_BASE_URL     = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-OPENAI_MODEL        = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 # Final decision thresholds
 BLOCK_THRESHOLD = 0.65
@@ -66,12 +62,6 @@ LAW_REFS: dict[str, dict[str, str]] = {
     "HIGH_VELOCITY":   {"section": "PMLA §3",         "description": "Money laundering",                    "max_sentence": "7 yrs + ₹5L fine"},
     "PROMPT_INJECTION":{"section": "IT Act §66",      "description": "Computer-related offence",            "max_sentence": "3 yrs + fine"},
 }
-
-openai_client: AsyncOpenAI | None = None
-if OPENAI_API_KEY:
-    openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
-else:
-    log.warning("OPENAI_API_KEY not set — narrative generation will use template fallback")
 
 # ─── Pydantic models ──────────────────────────────────────────────────────────
 
@@ -154,14 +144,7 @@ def map_law_refs(patterns: list[str], anomaly: float, velocity: int) -> list[dic
 
     return refs
 
-# ─── GPT-4o-mini narrative (zero-PII) ─────────────────────────────────────────
-
-NARRATIVE_SYSTEM = (
-    "You are Varaksha, an AI fraud analyst for a UPI payment system. "
-    "Write concise (≤120 words), court-ready, neutral-language fraud explanations. "
-    "You receive ONLY anonymized risk scores and pattern labels — no names, IPs, or UPI IDs. "
-    "State exactly which patterns triggered the verdict and which law sections apply."
-)
+# ─── Deterministic narrative (signed, reproducible) ──────────────────────────
 
 def _template_narrative(
     verdict: str,
@@ -178,7 +161,7 @@ def _template_narrative(
         f"This output is cryptographically signed and reproducible for court submission."
     )
 
-async def generate_narrative(
+def generate_narrative(
     verdict: str,
     final_score: float,
     patterns: list[str],
@@ -186,36 +169,8 @@ async def generate_narrative(
     a1: Agent01Verdict,
     a2: Agent02Verdict,
 ) -> str:
-    if openai_client is None:
-        return _template_narrative(verdict, final_score, patterns, law_refs)
-
-    user_msg = (
-        f"Verdict: {verdict}\n"
-        f"Final risk score: {final_score:.4f}\n"
-        f"Anomaly score (IsolationForest): {a1.anomaly_score:.4f}\n"
-        f"Graph score (mule network): {a2.graph_score:.4f}\n"
-        f"Velocity (txns/hr): {a1.velocity_score}\n"
-        f"Z-score (amount): {a1.zscore:.2f}\n"
-        f"Patterns detected: {patterns}\n"
-        f"Applicable law sections: {[r['section'] for r in law_refs]}\n"
-        f"SGX note: {a2.sgx_note}\n"
-        "Write the court-ready fraud explanation:"
-    )
-
-    try:
-        response = await openai_client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": NARRATIVE_SYSTEM},
-                {"role": "user",   "content": user_msg},
-            ],
-            max_tokens=180,
-            temperature=0.2,
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        log.warning("GPT-4o-mini call failed (%s) — using template narrative", e)
-        return _template_narrative(verdict, final_score, patterns, law_refs)
+    """Deterministic signed template — no external AI calls, no data leaves the server."""
+    return _template_narrative(verdict, final_score, patterns, law_refs)
 
 # ─── Signature helpers ────────────────────────────────────────────────────────
 
@@ -265,8 +220,8 @@ async def decide(ctx: CombinedContext) -> FinalVerdict:
         ctx.agent01.velocity_score,
     )
 
-    # 5. GPT-4o-mini narrative (zero-PII)
-    narrative = await generate_narrative(
+    # 5. Deterministic signed narrative (zero-PII, no external calls)
+    narrative = generate_narrative(
         verdict, final_score, ctx.agent02.patterns_detected,
         law_refs, ctx.agent01, ctx.agent02,
     )
@@ -295,8 +250,7 @@ async def decide(ctx: CombinedContext) -> FinalVerdict:
 @app.get("/health")
 async def health() -> dict:
     return {
-        "status":       "ok",
-        "agent":        "decision",
-        "llm_enabled":  openai_client is not None,
-        "llm_model":    OPENAI_MODEL,
+        "status":    "ok",
+        "agent":     "decision",
+        "narrative": "deterministic_template",
     }

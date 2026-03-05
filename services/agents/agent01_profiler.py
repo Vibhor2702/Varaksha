@@ -29,6 +29,7 @@ Outputs (JSON body):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -180,17 +181,8 @@ receiver_diversity_tracker = ReceiverDiversityTracker()
 # ─── IsolationForest loader ───────────────────────────────────────────────────
 
 def load_model() -> Any:
-    if MODEL_PATH.exists():
-        log.info("Loading IsolationForest from %s", MODEL_PATH)
-        return joblib.load(MODEL_PATH)
-    log.warning(
-        "Model not found at %s — using untrained fallback scorer. "
-        "Run: python agents/train_profiler.py", MODEL_PATH
-    )
-    from sklearn.ensemble import IsolationForest
-    clf = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
-    clf.fit(np.random.rand(500, 6))  # dummy fit — replace by training on PaySim
-    return clf
+    log.info("Loading IsolationForest from %s", MODEL_PATH)
+    return joblib.load(MODEL_PATH)
 
 
 _model = None
@@ -198,8 +190,76 @@ _model = None
 def get_model() -> Any:
     global _model
     if _model is None:
+        _verify_model_integrity()
         _model = load_model()
     return _model
+
+
+# ─── GATE-M-style model integrity check ────────────────────────────────────────────
+
+_MANIFEST_PATH = _BASE / "data" / "models" / "model_manifest.json"
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _verify_model_integrity() -> None:
+    """
+    Mirrors GATE-M's must_not_change hash-pinning pattern.
+
+    First call after training: records sha256 hashes of isolation_forest.pkl
+    and amount_stats.json in model_manifest.json (pinning the trusted state).
+
+    Subsequent calls: verifies files against their pinned hashes.
+    Hard-crashes if any file is missing or has been tampered with —
+    a poisoned IsolationForest would silently score every transaction wrong.
+
+    To accept a legitimately retrained model:
+        delete data/models/model_manifest.json, then restart agent01.
+    """
+    stats_file = _BASE / "data" / "models" / "amount_stats.json"
+
+    if not MODEL_PATH.exists():
+        raise RuntimeError(
+            f"Model file not found: {MODEL_PATH}\n"
+            "Train the model first:  python scripts/train_profiler.py\n"
+            "Agent01 will not start without a trained IsolationForest."
+        )
+
+    current_hashes: dict[str, str] = {
+        "isolation_forest.pkl": _sha256_file(MODEL_PATH),
+    }
+    if stats_file.exists():
+        current_hashes["amount_stats.json"] = _sha256_file(stats_file)
+
+    if not _MANIFEST_PATH.exists():
+        _MANIFEST_PATH.write_text(json.dumps(current_hashes, indent=2))
+        log.info("Model manifest created — hashes pinned at %s", _MANIFEST_PATH)
+        return
+
+    stored: dict[str, str] = json.loads(_MANIFEST_PATH.read_text())
+    for filename, expected_hash in stored.items():
+        actual_hash = current_hashes.get(filename)
+        if actual_hash is None:
+            raise RuntimeError(
+                f"Protected model file missing: {filename}\n"
+                "Restore from backup or retrain and delete model_manifest.json."
+            )
+        if actual_hash != expected_hash:
+            raise RuntimeError(
+                f"Model integrity check FAILED — {filename} has been modified.\n"
+                f"  Expected sha256: {expected_hash}\n"
+                f"  Actual   sha256: {actual_hash}\n"
+                "Possible model poisoning attack. Agent01 refusing to start.\n"
+                "To accept a legitimately retrained model: "
+                "delete data/models/model_manifest.json and restart."
+            )
+    log.info("Model integrity verified (GATE-M pattern) — all hashes match")
 
 
 # ─── Feature extraction ───────────────────────────────────────────────────────
