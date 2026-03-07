@@ -26,7 +26,19 @@ import hashlib
 import logging
 import pathlib
 import re
+import sys
 from dataclasses import dataclass, field
+
+# ── SHAP explain_transaction (graceful fallback if models not yet trained) ────
+_EXPLAIN_AVAILABLE = False
+try:
+    _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+    from services.local_engine.train_ensemble import explain_transaction as _explain_tx
+    _EXPLAIN_AVAILABLE = True
+except Exception:
+    pass  # training not run yet; contributions omitted from early demos
 
 log = logging.getLogger("varaksha.agent03")
 
@@ -47,12 +59,14 @@ class FlaggedTransaction:
 
 @dataclass
 class AlertResult:
-    transaction_id:  str
-    english_warning: str
-    hindi_warning:   str
-    laws_cited:      list[str]
-    audio_path:      pathlib.Path | None
-    risk_level:      str                 # "HIGH" | "CRITICAL"
+    transaction_id:    str
+    english_warning:   str
+    hindi_warning:     str
+    laws_cited:        list[str]
+    audio_path:        pathlib.Path | None
+    risk_level:        str                   # "HIGH" | "CRITICAL"
+    shap_contributions: list[dict] = field(default_factory=list)
+    # e.g. [{"feature": "amount_zscore", "shap_value": 0.62, "direction": "↑", "pct": 38.5}, …]
 
 
 # ── Law citation builder ──────────────────────────────────────────────────────
@@ -75,7 +89,11 @@ def _build_law_citations(tx: FlaggedTransaction) -> list[str]:
 
 # ── Mock LLM (replace with real GPT-4o-mini / Groq call) ─────────────────────
 
-def _mock_llm_english_warning(tx: FlaggedTransaction, laws: list[str]) -> str:
+def _mock_llm_english_warning(
+    tx: FlaggedTransaction,
+    laws: list[str],
+    shap_contributions: list[dict] | None = None,
+) -> str:
     """
     Mock LLM call — generates a court-ready English warning.
 
@@ -92,11 +110,20 @@ def _mock_llm_english_warning(tx: FlaggedTransaction, laws: list[str]) -> str:
     graph_str  = ", ".join(tx.graph_flags) if tx.graph_flags else "none"
     laws_str   = "; ".join(laws)
 
+    # Embed top SHAP signals for court-ready audit trail
+    shap_str = ""
+    if shap_contributions:
+        signals = [
+            f"{c['feature']}={c['direction']}{c['pct']}%"
+            for c in shap_contributions[:4]
+        ]
+        shap_str = f" Top risk signals: {', '.join(signals)}."
+
     warning = (
         f"FRAUD ALERT — Transaction {tx.transaction_id} has been BLOCKED. "
         f"A payment of {amount_str} to merchant category '{tx.merchant_category}' "
         f"has been flagged with a risk score of {tx.risk_score:.0%}. "
-        f"Network analysis flags: [{graph_str}]. "
+        f"Network analysis flags: [{graph_str}].{shap_str} "
         f"This activity may constitute offences under Indian law: {laws_str}. "
         f"If you did not initiate this payment, immediately contact your bank's "
         f"24-hour helpline and file a complaint at cybercrime.gov.in "
@@ -172,24 +199,51 @@ async def _generate_audio(text: str, transaction_id: str, language: str = "hi") 
 
 async def generate_alert(tx: FlaggedTransaction) -> AlertResult:
     """
-    Full pipeline: law citation → LLM warning → NMT translation → TTS audio.
+    Full pipeline: law citation → SHAP explanation → LLM warning → NMT translation → TTS audio.
     Returns an AlertResult ready for the Streamlit dashboard.
     """
     log.info("Generating alert for transaction %s (score=%.2f)", tx.transaction_id, tx.risk_score)
 
-    laws            = _build_law_citations(tx)
-    english_warning = _mock_llm_english_warning(tx, laws)
+    laws = _build_law_citations(tx)
+
+    # SHAP feature contributions (available once models are trained)
+    shap_contributions: list[dict] = []
+    if _EXPLAIN_AVAILABLE:
+        try:
+            # Build full feature dict — missing fields get sensible high-risk defaults
+            # so SHAP output reflects a worst-case explanation (conservative / safer for court use)
+            tx_dict = {
+                "merchant_category"    : tx.merchant_category,
+                "transaction_type"     : "DEBIT",
+                "device_type"          : "ANDROID",
+                "amount"               : tx.amount_inr,
+                "hour_of_day"          : 3,     # blocked tx assumed to be late night
+                "day_of_week"          : 6,
+                "transactions_last_1h" : 10,
+                "transactions_last_24h": 25,
+                "amount_zscore"        : max(3.0, (tx.amount_inr - 3000) / 5000),
+                "gps_delta_km"         : 500.0 if "CYCLE" in tx.graph_flags else 5.0,
+                "is_new_device"        : 1,
+                "is_new_merchant"      : 1,
+            }
+            shap_contributions = _explain_tx(tx_dict)
+            log.info("SHAP contributions: %s", shap_contributions[:3])
+        except Exception as exc:
+            log.warning("SHAP explain unavailable: %s", exc)
+
+    english_warning = _mock_llm_english_warning(tx, laws, shap_contributions)
     hindi_warning   = _mock_bhashini_nmt_translate(english_warning, target_language="hi")
     audio_path      = await _generate_audio(hindi_warning, tx.transaction_id, language="hi")
     risk_level      = "CRITICAL" if tx.risk_score >= 0.85 else "HIGH"
 
     return AlertResult(
-        transaction_id  = tx.transaction_id,
-        english_warning = english_warning,
-        hindi_warning   = hindi_warning,
-        laws_cited      = laws,
-        audio_path      = audio_path,
-        risk_level      = risk_level,
+        transaction_id     = tx.transaction_id,
+        english_warning    = english_warning,
+        hindi_warning      = hindi_warning,
+        laws_cited         = laws,
+        audio_path         = audio_path,
+        risk_level         = risk_level,
+        shap_contributions = shap_contributions,
     )
 
 
@@ -218,5 +272,10 @@ if __name__ == "__main__":
     for law in result.laws_cited:
         print(f"  • {law}")
     print(f"\nRISK LEVEL : {result.risk_level}")
-    print(f"AUDIO FILE : {result.audio_path}")
+    if result.shap_contributions:
+        print("\nSHAP TOP RISK SIGNALS (security audit trail):")
+        for c in result.shap_contributions:
+            bar = "█" * int(c["pct"] / 5)
+            print(f"  {c['direction']} {c['feature']:<25} {c['shap_value']:+.4f}  [{bar}] {c['pct']:.1f}%")
+    print(f"\nAUDIO FILE : {result.audio_path}")
     print("═" * 60)

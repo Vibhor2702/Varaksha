@@ -9,6 +9,13 @@ Covers every "Bible" ML objective:
   ✔ Ensemble Methods    — RandomForest + XGBoost
   ✔ Imbalanced dataset  — SMOTE (imblearn)
   ✔ Saves model         — joblib
+  ✔ Security Explainability — SHAP (why was this transaction flagged?)
+
+Security explainability (XAI) is critical for:
+  - Analyst review: "why was this payment blocked?"
+  - Regulator audit trail: evidence that the decision is feature-driven, not biased
+  - Court-ready reports: SHAP contributions map directly to BNS/IT Act evidence
+  - False positive triage: identify when legitimate transactions are wrongly blocked
 
 Usage:
     python services/local_engine/train_ensemble.py
@@ -19,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import logging
 import pathlib
 import sys
@@ -26,6 +34,10 @@ import sys
 import joblib
 import numpy as np
 import pandas as pd
+import shap
+import matplotlib
+matplotlib.use("Agg")  # non-interactive backend — safe on headless servers
+import matplotlib.pyplot as plt
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import IsolationForest, RandomForestClassifier, VotingClassifier
 from sklearn.metrics import classification_report, roc_auc_score
@@ -43,13 +55,19 @@ log = logging.getLogger("varaksha.train_ensemble")
 
 ROOT        = pathlib.Path(__file__).resolve().parents[2]
 MODEL_DIR   = ROOT / "data" / "models"
+EXPLAIN_DIR = ROOT / "data" / "explainability"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
+EXPLAIN_DIR.mkdir(parents=True, exist_ok=True)
 
 RF_PATH     = MODEL_DIR / "random_forest.pkl"
 XGB_PATH    = MODEL_DIR / "xgboost.pkl"
 VOTING_PATH = MODEL_DIR / "voting_ensemble.pkl"
 SCALER_PATH = MODEL_DIR / "scaler.pkl"
 ISO_PATH    = MODEL_DIR / "isolation_forest.pkl"
+SHAP_RF_PATH  = MODEL_DIR / "shap_explainer_rf.pkl"
+SHAP_XGB_PATH = MODEL_DIR / "shap_explainer_xgb.pkl"
+FEATURE_COLS_PATH   = MODEL_DIR / "feature_cols.json"
+LABEL_ENCODERS_PATH = MODEL_DIR / "label_encoders.pkl"
 
 # ── Feature columns ──────────────────────────────────────────────────────────
 
@@ -125,11 +143,16 @@ def preprocess(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, StandardScaler
     """Encode categoricals, scale numericals, return (X, y, scaler)."""
     df = df.copy()
 
-    # Encode categoricals
-    le = LabelEncoder()
+    # Encode categoricals — save a LabelEncoder per column for use in explain_transaction
+    label_encoders: dict[str, LabelEncoder] = {}
     for col in CATEGORICAL:
         if col in df.columns:
+            le = LabelEncoder()
             df[col] = le.fit_transform(df[col].astype(str))
+            label_encoders[col] = le
+
+    joblib.dump(label_encoders, LABEL_ENCODERS_PATH)
+    log.info("Label encoders saved → %s", LABEL_ENCODERS_PATH)
 
     feature_cols = [c for c in CATEGORICAL + NUMERICAL if c in df.columns]
     X_raw = df[feature_cols].values.astype(np.float32)
@@ -252,6 +275,138 @@ def train_voting_ensemble(rf: RandomForestClassifier, xgb: XGBClassifier) -> Vot
     return voting
 
 
+# ── SHAP Security Explainability ─────────────────────────────────────────────
+
+def generate_shap_explainer(
+    rf: RandomForestClassifier,
+    xgb: XGBClassifier,
+    X_train: np.ndarray,
+    feature_cols: list[str],
+) -> None:
+    """
+    Generate SHAP explainability artifacts for security audit.
+
+    Saves:
+      data/models/shap_explainer_rf.pkl        — TreeExplainer for RandomForest
+      data/models/shap_explainer_xgb.pkl       — TreeExplainer for XGBoost
+      data/models/feature_cols.json            — ordered feature name list
+      data/explainability/shap_summary_rf.png  — global SHAP beeswarm plot (RF)
+      data/explainability/shap_summary_xgb.png — global SHAP beeswarm plot (XGB)
+      data/explainability/shap_values_rf.npy   — raw SHAP values (fraud class)
+
+    Security rationale:
+      - Analyst review:   which features drove a BLOCK decision
+      - Regulator audit:  decision is feature-driven, not biased
+      - Court-ready:      SHAP contributions map to BNS §318(4) / IT Act §66D evidence
+      - FP triage:        identify wrongly-blocked legitimate payments
+    """
+    log.info("Generating SHAP explainability artifacts …")
+
+    sample = X_train[:500]  # representative, manageable sample
+
+    # ── RandomForest SHAP ──
+    explainer_rf   = shap.TreeExplainer(rf)
+    shap_values_rf = explainer_rf.shap_values(sample)
+    # Handle both old API (list of arrays) and new API (3D array n_samples×n_features×n_classes)
+    if isinstance(shap_values_rf, list):
+        sv_fraud_rf = shap_values_rf[1]           # list[class_1] → (n_samples, n_features)
+    elif shap_values_rf.ndim == 3:
+        sv_fraud_rf = shap_values_rf[:, :, 1]     # (n_samples, n_features, class_1)
+    else:
+        sv_fraud_rf = shap_values_rf
+
+    joblib.dump(explainer_rf, SHAP_RF_PATH)
+    np.save(EXPLAIN_DIR / "shap_values_rf.npy", sv_fraud_rf)
+    log.info("RF SHAP explainer saved → %s", SHAP_RF_PATH)
+
+    plt.figure(figsize=(10, 6))
+    shap.summary_plot(sv_fraud_rf, sample, feature_names=feature_cols, show=False)
+    plt.title("SHAP Feature Importance — Fraud Class (RandomForest)")
+    plt.tight_layout()
+    plt.savefig(EXPLAIN_DIR / "shap_summary_rf.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    log.info("SHAP summary plot → %s", EXPLAIN_DIR / "shap_summary_rf.png")
+
+    # ── XGBoost SHAP ──
+    explainer_xgb   = shap.TreeExplainer(xgb)
+    shap_values_xgb = explainer_xgb.shap_values(sample)
+    if isinstance(shap_values_xgb, list):
+        sv_fraud_xgb = shap_values_xgb[1]
+    elif shap_values_xgb.ndim == 3:
+        sv_fraud_xgb = shap_values_xgb[:, :, 1]
+    else:
+        sv_fraud_xgb = shap_values_xgb
+
+    joblib.dump(explainer_xgb, SHAP_XGB_PATH)
+    log.info("XGB SHAP explainer saved → %s", SHAP_XGB_PATH)
+
+    plt.figure(figsize=(10, 6))
+    shap.summary_plot(sv_fraud_xgb, sample, feature_names=feature_cols, show=False)
+    plt.title("SHAP Feature Importance — Fraud Class (XGBoost)")
+    plt.tight_layout()
+    plt.savefig(EXPLAIN_DIR / "shap_summary_xgb.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    log.info("SHAP summary plot → %s", EXPLAIN_DIR / "shap_summary_xgb.png")
+
+    # ── Feature column registry ──
+    FEATURE_COLS_PATH.write_text(json.dumps(feature_cols))
+    log.info("Feature columns saved → %s", FEATURE_COLS_PATH)
+    log.info("✔  All SHAP artifacts saved to %s", EXPLAIN_DIR)
+
+
+def explain_transaction(transaction_dict: dict) -> list[dict]:
+    """
+    Return the top-6 SHAP feature contributions for a single transaction.
+
+    This is the public API consumed by:
+      - agent03_accessible_alert.py  → include in Hindi/English warning text
+      - services/demo/app.py         → render waterfall chart in dashboard
+
+    Returns:
+        List of dicts ordered by |shap_value| descending:
+        [{"feature": "amount_zscore", "shap_value": 0.62, "direction": "↑"}, …]
+    """
+    explainer_rf   = joblib.load(SHAP_RF_PATH)
+    scaler         = joblib.load(SCALER_PATH)
+    label_encoders = joblib.load(LABEL_ENCODERS_PATH)
+    feature_cols   = json.loads(FEATURE_COLS_PATH.read_text())
+
+    row = pd.DataFrame([transaction_dict])
+
+    # Encode categorical columns using the saved LabelEncoders from training
+    for col, le in label_encoders.items():
+        if col in row.columns:
+            known = set(le.classes_)
+            row[col] = row[col].astype(str).apply(
+                lambda v: int(le.transform([v])[0]) if v in known else 0
+            )
+
+    row   = row[feature_cols].fillna(0)
+    X_row = scaler.transform(row.values.astype(np.float32))
+
+    raw = explainer_rf.shap_values(X_row)
+
+    # Newer SHAP returns (n_samples, n_features, n_classes); older returns list[class][samples]
+    if isinstance(raw, list):
+        sv_row = raw[1][0]          # list index: class 1 (fraud), sample 0
+    elif raw.ndim == 3:
+        sv_row = raw[0, :, 1]       # (sample_0, all_features, class_1)
+    else:
+        sv_row = raw[0]             # (sample_0, all_features) — already fraud class
+
+    contributions = [
+        {
+            "feature"    : f,
+            "shap_value" : float(v.item() if hasattr(v, "item") else v),
+            "direction"  : "↑" if v > 0 else "↓",
+            "pct"        : float(round(abs(float(v)) / (sum(abs(sv_row)) + 1e-9) * 100, 1)),
+        }
+        for f, v in zip(feature_cols, sv_row)
+    ]
+    contributions.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
+    return contributions[:6]
+
+
 # ── Evaluation ────────────────────────────────────────────────────────────────
 
 def evaluate(name: str, model, X_test: np.ndarray, y_test: np.ndarray) -> None:
@@ -260,7 +415,9 @@ def evaluate(name: str, model, X_test: np.ndarray, y_test: np.ndarray) -> None:
         auc      = roc_auc_score(y_test, proba)
         y_pred   = (proba >= 0.5).astype(int)
     else:
-        y_pred = model.predict(X_test)
+        # IsolationForest: predict() returns 1 (inlier) or -1 (outlier)
+        raw    = model.predict(X_test)
+        y_pred = np.where(raw == -1, 1, 0).astype(int)  # -1 → fraud(1), 1 → legit(0)
         auc    = None
 
     print(f"\n{'═'*55}")
@@ -291,6 +448,7 @@ def main(data_path: str | None = None) -> None:
     X, y, scaler = preprocess(df)
     joblib.dump(scaler, SCALER_PATH)
     log.info("Scaler saved → %s", SCALER_PATH)
+    feature_cols = [c for c in CATEGORICAL + NUMERICAL if c in df.columns]
 
     # 3. Train/test split (BEFORE SMOTE — never oversample the test set)
     X_train, X_test, y_train, y_test = train_test_split(
@@ -316,7 +474,11 @@ def main(data_path: str | None = None) -> None:
     voting = train_voting_ensemble(rf, xgb)
     evaluate("Soft-Voting Ensemble (RF + XGB)", voting, X_test, y_test)
 
+    # 9. SHAP security explainability artifacts
+    generate_shap_explainer(rf, xgb, X_sm, feature_cols)
+
     print("\n✔  All models saved to", MODEL_DIR)
+    print("✔  SHAP explainability artifacts saved to", EXPLAIN_DIR)
 
 
 if __name__ == "__main__":

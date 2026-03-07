@@ -1,0 +1,1 @@
+["merchant_category", "transaction_type", "device_type", "amount", "hour_of_day", "day_of_week", "transactions_last_1h", "transactions_last_24h", "amount_zscore", "gps_delta_km", "is_new_device", "is_new_merchant"]

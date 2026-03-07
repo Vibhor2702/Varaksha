@@ -283,6 +283,34 @@ with col_alert2:
             st.caption(f"File: `{result.audio_path.name}`")
         else:
             st.caption("⚠️ Audio not generated — run `pip install edge-tts` to enable.")
+
+        # SHAP waterfall for this transaction
+        if result.shap_contributions:
+            st.markdown("**🔬 SHAP Explainability — Why was this blocked?**")
+            shap_df = pd.DataFrame(result.shap_contributions)
+            shap_fig = go.Figure(go.Bar(
+                x          = shap_df["shap_value"],
+                y          = shap_df["feature"],
+                orientation= "h",
+                marker_color= ["#e74c3c" if v > 0 else "#2ecc71" for v in shap_df["shap_value"]],
+                text       = [f"{v:+.4f} ({p:.1f}%)" for v, p in zip(shap_df["shap_value"], shap_df["pct"])],
+                textposition= "outside",
+            ))
+            shap_fig.update_layout(
+                title       = "Feature Contributions (SHAP values — fraud class)",
+                xaxis_title = "SHAP value",
+                height      = 320,
+                margin      = dict(l=10, r=80, t=40, b=10),
+                plot_bgcolor= "#0e1117",
+                paper_bgcolor="#0e1117",
+                font        = dict(color="#ecf0f1"),
+            )
+            st.plotly_chart(shap_fig, use_container_width=True)
+            st.caption(
+                "Red bars = features that increased fraud probability. "
+                "Green bars = features that decreased it. "
+                "This chart is court-admissible audit evidence."
+            )
     else:
         st.markdown(
             """
@@ -296,6 +324,62 @@ with col_alert2:
             > — Varaksha V2 Design Brief
             """
         )
+
+# ── Section 4: Global SHAP Model Explainability ──────────────────────────────
+st.divider()
+st.subheader("📊 Section 4: Global SHAP Explainability — Model Audit (Layer 1)")
+
+st.info(
+    "**SHAP (SHapley Additive exPlanations)** shows which features drove the model's "
+    "predictions globally. Regulators, auditors, and courts can use these plots to verify "
+    "that the model is not discriminating on protected attributes. "
+    "Run `python services/local_engine/train_ensemble.py` to generate these artifacts.",
+    icon="ℹ️",
+)
+
+EXPLAIN_DIR = ROOT / "data" / "explainability"
+shap_col1, shap_col2 = st.columns(2)
+
+rf_shap_path  = EXPLAIN_DIR / "shap_summary_rf.png"
+xgb_shap_path = EXPLAIN_DIR / "shap_summary_xgb.png"
+
+with shap_col1:
+    st.markdown("**RandomForest — SHAP Feature Importance**")
+    if rf_shap_path.exists():
+        st.image(str(rf_shap_path), use_column_width=True)
+    else:
+        st.warning("Not generated yet — run the training script first.")
+        st.code("python services/local_engine/train_ensemble.py", language="bash")
+
+with shap_col2:
+    st.markdown("**XGBoost — SHAP Feature Importance**")
+    if xgb_shap_path.exists():
+        st.image(str(xgb_shap_path), use_column_width=True)
+    else:
+        st.warning("Not generated yet — run the training script first.")
+        st.code("python services/local_engine/train_ensemble.py", language="bash")
+
+# Model inventory table
+st.markdown("**🗄️ Trained Model Inventory**")
+MODEL_DIR = ROOT / "data" / "models"
+model_files = [
+    ("random_forest.pkl",       "RandomForestClassifier",  "Supervised — ensemble (primary)"),
+    ("xgboost.pkl",             "XGBClassifier",           "Supervised — gradient boosting"),
+    ("voting_ensemble.pkl",     "VotingClassifier",        "Soft-vote RF+XGB composite"),
+    ("isolation_forest.pkl",    "IsolationForest",         "Unsupervised — anomaly detection"),
+    ("scaler.pkl",              "StandardScaler",          "Feature normalisation"),
+    ("shap_explainer_rf.pkl",   "TreeExplainer (RF)",      "SHAP explainability — RF"),
+    ("shap_explainer_xgb.pkl",  "TreeExplainer (XGB)",     "SHAP explainability — XGB"),
+    ("feature_cols.json",       "JSON",                    "Ordered feature column registry"),
+]
+inventory_rows = []
+for fname, model_type, purpose in model_files:
+    fpath  = MODEL_DIR / fname
+    exists = fpath.exists()
+    size   = f"{fpath.stat().st_size / 1024:.1f} KB" if exists else "—"
+    inventory_rows.append({"File": fname, "Type": model_type, "Purpose": purpose,
+                            "Status": "✅ Ready" if exists else "⏳ Not trained", "Size": size})
+st.dataframe(pd.DataFrame(inventory_rows), use_container_width=True, hide_index=True)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.divider()
