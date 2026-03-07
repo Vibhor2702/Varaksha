@@ -33,6 +33,7 @@ from agents.agent03_accessible_alert import (  # noqa: E402
     FlaggedTransaction,
     UserProfile,
     generate_alert,
+    get_supported_languages,
 )
 from graph.graph_agent import build_demo_graph, run_detection  # noqa: E402
 
@@ -257,14 +258,10 @@ with col_tx:
 
 with col_profile:
     st.markdown("##### User Profile (sent by bank app)")
-    _LANG_OPTIONS = {
-        "Hindi (hi)"     : "hi", "English (en)"  : "en",
-        "Tamil (ta)"     : "ta", "Telugu (te)"   : "te",
-        "Bengali (bn)"   : "bn", "Gujarati (gu)" : "gu",
-        "Kannada (kn)"   : "kn", "Malayalam (ml)": "ml",
-        "Marathi (mr)"   : "mr", "Punjabi (pa)"  : "pa",
-    }
-    sim_lang     = st.selectbox("Language", list(_LANG_OPTIONS.keys()), index=0)
+    _LANG_OPTIONS = get_supported_languages()  # dynamic — all languages gTTS supports
+    _lang_keys    = list(_LANG_OPTIONS.keys())
+    _default_idx  = next((i for i, k in enumerate(_lang_keys) if "Hindi" in k), 0)
+    sim_lang      = st.selectbox("Language", _lang_keys, index=_default_idx)
     sim_age      = st.selectbox(
         "Age Group",
         ["child (6–12)", "teen (13–17)", "adult (18–60)", "senior (60+)"],

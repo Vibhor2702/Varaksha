@@ -39,6 +39,7 @@ Indian laws cited (with live government URLs):
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 import logging
 import pathlib
@@ -303,8 +304,34 @@ try:
 except ImportError:
     pass
 
-# Languages gTTS supports natively for audio generation
-_GTTS_SUPPORTED = {"hi", "bn", "gu", "kn", "ml", "mr", "ta", "te", "pa", "ur", "en"}
+@functools.lru_cache(maxsize=1)
+def _gtts_langs() -> set[str]:
+    """
+    Return the set of language codes supported by gTTS.
+    Queried once at runtime — covers all languages Google TTS supports,
+    not a hardcoded list. Falls back to a minimal safe set if unavailable.
+    """
+    try:
+        from gtts.lang import tts_langs  # type: ignore
+        return set(tts_langs().keys())
+    except Exception:
+        return {"hi", "en"}  # minimal fallback; gTTS install issue
+
+
+@functools.lru_cache(maxsize=1)
+def get_supported_languages() -> dict[str, str]:
+    """
+    Return {"Language Name (code)": "code"} for every language that both
+    deep-translator and gTTS support — built dynamically at runtime.
+    Suitable for populating a UI language picker without hardcoding.
+    """
+    try:
+        from gtts.lang import tts_langs  # type: ignore
+        langs = tts_langs()  # {code: name}, e.g. {"hi": "Hindi", "ta": "Tamil"}
+    except Exception:
+        langs = {"hi": "Hindi", "en": "English"}
+    return {f"{name} ({code})": code for code, name in sorted(langs.items(), key=lambda x: x[1])}
+
 
 def _translate(text: str, target_lang: str) -> str:
     """
@@ -351,7 +378,7 @@ async def _generate_audio(
 
     # Keep only the first 500 chars for audio â€” long text causes gTTS timeouts
     audio_text = text[:500].strip()
-    audio_lang = language if language in _GTTS_SUPPORTED else "hi"
+    audio_lang = language if language in _gtts_langs() else "hi"
 
     # 1. Try gTTS first
     try:
