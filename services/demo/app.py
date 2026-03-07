@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT / "services"))
 
 from agents.agent03_accessible_alert import (  # noqa: E402
     FlaggedTransaction,
+    UserProfile,
     generate_alert,
 )
 from graph.graph_agent import build_demo_graph, run_detection  # noqa: E402
@@ -228,102 +229,153 @@ for i, (typology, color) in enumerate(TYPOLOGY_COLOR.items()):
         unsafe_allow_html=True,
     )
 
-# ── Section 3: Accessible Alert Panel ────────────────────────────────────────
+# ── Section 3: Personalised Alert Panel ─────────────────────────────────────
 st.divider()
-st.subheader("🔔 Section 3: Accessible Alert — Mock-Bhashini Layer (Layer 4)")
+st.subheader("🔔 Section 3: Personalised Multilingual Alert (Layer 4)")
 
 st.info(
-    "When a transaction is BLOCKED, the system generates a **court-ready English legal warning** "
-    "(citing BNS/IT Act laws), translates it to **Hindi via Mock-Bhashini NMT**, and produces "
-    "an **MP3 audio alert** using `edge-tts` Neural TTS (hi-IN-SwaraNeural voice).",
+    "Bank apps send the user's **language**, **age group**, and **education level** with every alert "
+    "request. The system adapts vocabulary, tone, and legal detail accordingly, translates via "
+    "**Google Translate** (free, no API key — replaces Bhashini NMT), generates **MP3 audio** via "
+    "**gTTS**, and links to real Indian government law portals.",
     icon="ℹ️",
 )
 
-col_alert1, col_alert2 = st.columns([1, 1])
+col_tx, col_profile = st.columns([3, 2])
 
-with col_alert1:
-    st.subheader("🎯 Simulate a Blocked Transaction")
+with col_tx:
+    st.markdown("##### Transaction Details")
     sim_vpa    = st.text_input("VPA (will be hashed)", value="attacker@ybl")
     sim_amount = st.number_input("Amount (INR)", value=175_000.0, step=1000.0)
     sim_cat    = st.selectbox("Merchant Category", ["P2P", "GAMBLING", "ECOM", "TRAVEL"])
     sim_score  = st.slider("Risk Score", 0.75, 1.00, 0.92, 0.01)
-    sim_flags  = st.multiselect("Graph Flags", ["FAN_OUT", "FAN_IN", "CYCLE", "SCATTER"], default=["FAN_OUT", "CYCLE"])
-    run_alert  = st.button("🚨 Generate Alert", type="primary")
+    sim_flags  = st.multiselect(
+        "Graph Flags",
+        ["FAN_OUT", "FAN_IN", "CYCLE", "SCATTER"],
+        default=["FAN_OUT", "CYCLE"],
+    )
 
-with col_alert2:
-    if run_alert:
-        tx = FlaggedTransaction(
-            transaction_id    = f"TXN-DEMO-{int(time.time())}",
-            vpa_hash          = hashlib.sha256(sim_vpa.encode()).hexdigest(),
-            amount_inr        = sim_amount,
-            merchant_category = sim_cat,
-            risk_score        = sim_score,
-            graph_flags       = sim_flags,
-        )
-        with st.spinner("Generating multilingual alert…"):
-            result = asyncio.run(generate_alert(tx))
+with col_profile:
+    st.markdown("##### User Profile (sent by bank app)")
+    _LANG_OPTIONS = {
+        "Hindi (hi)"     : "hi", "English (en)"  : "en",
+        "Tamil (ta)"     : "ta", "Telugu (te)"   : "te",
+        "Bengali (bn)"   : "bn", "Gujarati (gu)" : "gu",
+        "Kannada (kn)"   : "kn", "Malayalam (ml)": "ml",
+        "Marathi (mr)"   : "mr", "Punjabi (pa)"  : "pa",
+    }
+    sim_lang     = st.selectbox("Language", list(_LANG_OPTIONS.keys()), index=0)
+    sim_age      = st.selectbox(
+        "Age Group",
+        ["child (6–12)", "teen (13–17)", "adult (18–60)", "senior (60+)"],
+        index=2,
+    )
+    sim_edu      = st.selectbox(
+        "Education Level",
+        ["basic (primary/illiterate)", "intermediate (secondary)", "graduate"],
+        index=1,
+    )
+    st.caption(
+        "'basic' → simple sentences. 'graduate' → full legal detail. "
+        "'senior/basic' → numbered steps, no jargon."
+    )
 
-        risk_label = "🔴 CRITICAL" if result.risk_level == "CRITICAL" else "🟠 HIGH"
-        st.markdown(f"### {risk_label} — Transaction Blocked")
+run_alert = st.button("🚨 Generate Personalised Alert", type="primary")
 
-        st.markdown("**📄 English Warning (Court-Ready)**")
+if run_alert:
+    _age_key = sim_age.split(" ")[0]       # "child", "teen", "adult", "senior"
+    _edu_key = sim_edu.split(" ")[0]       # "basic", "intermediate", "graduate"
+    _lang_key = _LANG_OPTIONS[sim_lang]
+
+    tx = FlaggedTransaction(
+        transaction_id    = f"TXN-DEMO-{int(time.time())}",
+        vpa_hash          = hashlib.sha256(sim_vpa.encode()).hexdigest(),
+        amount_inr        = sim_amount,
+        merchant_category = sim_cat,
+        risk_score        = sim_score,
+        graph_flags       = sim_flags,
+    )
+    profile = UserProfile(language=_lang_key, age_group=_age_key, education=_edu_key)
+
+    with st.spinner("Generating personalised multilingual alert…"):
+        result = asyncio.run(generate_alert(tx, profile=profile))
+
+    risk_label = "🔴 CRITICAL" if result.risk_level == "CRITICAL" else "🟠 HIGH"
+    st.markdown(f"### {risk_label} — Transaction Blocked | Reading level: `{result.reading_level}`")
+
+    col_r1, col_r2 = st.columns([1, 1])
+
+    with col_r1:
+        st.markdown("**📄 English Report**")
         st.warning(result.english_warning)
 
-        st.markdown("**🇮🇳 Hindi Warning (Mock-Bhashini NMT)**")
-        st.error(result.hindi_warning)
-
-        st.markdown("**⚖️ Laws Cited**")
-        for law in result.laws_cited:
-            st.markdown(f"- `{law}`")
+        if result.translated_warning != result.english_warning:
+            st.markdown(f"**🌐 {sim_lang} Translation (deep-translator · Google Translate)**")
+            st.error(result.translated_warning)
 
         if result.audio_path and result.audio_path.exists():
-            st.markdown("**🔊 Audio Alert (edge-tts · hi-IN-SwaraNeural)**")
+            st.markdown("**🔊 Audio Alert (gTTS)**")
             with open(result.audio_path, "rb") as f:
                 st.audio(f.read(), format="audio/mp3")
-            st.caption(f"File: `{result.audio_path.name}`")
+            st.caption(f"`{result.audio_path.name}`")
         else:
-            st.caption("⚠️ Audio not generated — run `pip install edge-tts` to enable.")
+            st.caption("⚠️ Audio not generated (network required for gTTS / edge-tts).")
 
-        # SHAP waterfall for this transaction
-        if result.shap_contributions:
-            st.markdown("**🔬 SHAP Explainability — Why was this blocked?**")
-            shap_df = pd.DataFrame(result.shap_contributions)
-            shap_fig = go.Figure(go.Bar(
-                x          = shap_df["shap_value"],
-                y          = shap_df["feature"],
-                orientation= "h",
-                marker_color= ["#e74c3c" if v > 0 else "#2ecc71" for v in shap_df["shap_value"]],
-                text       = [f"{v:+.4f} ({p:.1f}%)" for v, p in zip(shap_df["shap_value"], shap_df["pct"])],
-                textposition= "outside",
-            ))
-            shap_fig.update_layout(
-                title       = "Feature Contributions (SHAP values — fraud class)",
-                xaxis_title = "SHAP value",
-                height      = 320,
-                margin      = dict(l=10, r=80, t=40, b=10),
-                plot_bgcolor= "#0e1117",
-                paper_bgcolor="#0e1117",
-                font        = dict(color="#ecf0f1"),
+    with col_r2:
+        st.markdown("**⚖️ Applicable Laws (with official links)**")
+        for lw in result.law_links:
+            st.markdown(
+                f"- [{lw['citation']}]({lw['url']})  "
+                f"  _Penalty: {lw['penalty']}_"
             )
-            st.plotly_chart(shap_fig, use_container_width=True)
-            st.caption(
-                "Red bars = features that increased fraud probability. "
-                "Green bars = features that decreased it. "
-                "This chart is court-admissible audit evidence."
-            )
-    else:
-        st.markdown(
-            """
-            **How it works:**
-            1. Fill in the transaction details on the left.
-            2. Click **Generate Alert**.
-            3. The system will cite applicable Indian laws, translate to Hindi,
-               and generate a spoken audio warning.
 
-            > *"Security is useless if the victim doesn't understand the warning."*
-            > — Varaksha V2 Design Brief
-            """
+        st.markdown("**📞 Report It — Official Portals**")
+        for contact in result.contact_links:
+            helpline = f" · Helpline: **{contact['helpline']}**" if contact["helpline"] else ""
+            st.markdown(f"- [{contact['name']}]({contact['url']}){helpline}")
+
+        st.markdown("**✅ What You Must Do Now**")
+        for i, step in enumerate(result.next_steps, 1):
+            st.markdown(f"{i}. {step}")
+
+    # SHAP waterfall for this transaction
+    if result.shap_contributions:
+        st.markdown("**🔬 SHAP Explainability — Why was this blocked?**")
+        shap_df = pd.DataFrame(result.shap_contributions)
+        shap_fig = go.Figure(go.Bar(
+            x           = shap_df["shap_value"],
+            y           = shap_df["feature"],
+            orientation = "h",
+            marker_color= ["#e74c3c" if v > 0 else "#2ecc71" for v in shap_df["shap_value"]],
+            text        = [f"{v:+.4f} ({p:.1f}%)" for v, p in zip(shap_df["shap_value"], shap_df["pct"])],
+            textposition= "outside",
+        ))
+        shap_fig.update_layout(
+            title        = "Feature Contributions (SHAP values — fraud class)",
+            xaxis_title  = "SHAP value",
+            height       = 320,
+            margin       = dict(l=10, r=80, t=40, b=10),
+            plot_bgcolor = "#0e1117",
+            paper_bgcolor= "#0e1117",
+            font         = dict(color="#ecf0f1"),
         )
+        st.plotly_chart(shap_fig, use_container_width=True)
+        st.caption(
+            "Red = increased fraud probability | Green = decreased. Court-admissible audit trail."
+        )
+else:
+    st.markdown(
+        """
+        **How it works:**
+        1. Adjust the transaction details and user profile above.
+        2. Click **Generate Personalised Alert**.
+        3. The system adapts vocabulary for the user's age and education, translates to their
+           language, and generates a spoken audio warning with real Indian law links.
+
+        > *"Security is useless if the victim doesn't understand the warning."*
+        > — Varaksha V2 Design Brief
+        """
+    )
 
 # ── Section 4: Global SHAP Model Explainability ──────────────────────────────
 st.divider()
