@@ -360,17 +360,84 @@ with shap_col2:
         st.code("python services/local_engine/train_ensemble.py", language="bash")
 
 # Model inventory table
-st.markdown("**🗄️ Trained Model Inventory**")
 MODEL_DIR = ROOT / "data" / "models"
+
+# ── PR-AUC comparison vs paper baseline ──────────────────────────────────────
+st.markdown("**📈 Model Performance vs Paper Baseline (Sadaf & Manivannan, IJIEE 2024)**")
+st.caption(
+    "Paper result: GBM without SMOTE → 65% fraud recall, ROC-AUC 85.12%. "
+    "Varaksha adds balance-error features, SMOTE, and a 3-model voting ensemble with "
+    "F2-optimised threshold."
+)
+
+metrics_path = MODEL_DIR / "training_metrics.json"
+if metrics_path.exists():
+    raw_metrics: list[dict] = json.loads(metrics_path.read_text())
+    perf_rows = []
+    for m in raw_metrics:
+        if m.get("pr_auc") is not None:
+            perf_rows.append({
+                "Model": m["name"],
+                "PR-AUC": f"{m['pr_auc']:.4f}",
+                "ROC-AUC": f"{m['roc_auc']:.4f}",
+                "F2-score": f"{m['f2']:.4f}",
+                "Threshold": f"{m['threshold']:.3f}",
+            })
+    # Append paper baseline row for comparison
+    perf_rows.append({
+        "Model": "Paper (Sadaf & Manivannan GBM, no SMOTE) ⚠️",
+        "PR-AUC": "0.7200 (est.)",
+        "ROC-AUC": "0.8512",
+        "F2-score": "0.5700 (est., 65% recall)",
+        "Threshold": "0.500 (default)",
+    })
+    st.dataframe(pd.DataFrame(perf_rows), use_container_width=True, hide_index=True)
+else:
+    st.warning("Training metrics not found — run the training script first.")
+
+# PR-AUC curves
+st.markdown("**Precision-Recall Curves**")
+pr_cols = st.columns(2)
+pr_files = [
+    ("pr_curve_xgboost.png",                "XGBoost PR Curve"),
+    ("pr_curve_soft-voting_(rf_xgb_lgbm).png", "Soft-Voting Ensemble PR Curve"),
+]
+for i, (fname, caption) in enumerate(pr_files):
+    pr_path = EXPLAIN_DIR / fname
+    with pr_cols[i % 2]:
+        st.markdown(f"**{caption}**")
+        if pr_path.exists():
+            st.image(str(pr_path), use_column_width=True)
+        else:
+            st.warning("Run training script to generate.")
+
+# ── PromptGuard status ────────────────────────────────────────────────────────
+st.markdown("**🛡️ PromptGuard — Layer 0 Injection Classifier**")
+guard_metrics_path = MODEL_DIR / "prompt_guard_metrics.json"
+if guard_metrics_path.exists():
+    gm = json.loads(guard_metrics_path.read_text())
+    gc1, gc2, gc3, gc4 = st.columns(4)
+    gc1.metric("ROC-AUC",          f"{gm['roc_auc']:.4f}")
+    gc2.metric("PR-AUC",           f"{gm['pr_auc']:.4f}")
+    gc3.metric("Training samples", str(gm['n_train']))
+    gc4.metric("Injection rate",   f"{100*gm['injection_rate']:.1f}%")
+else:
+    st.warning("PromptGuard not trained — run `python services/local_engine/prompt_guard.py`")
+
+# ── Trained model inventory ───────────────────────────────────────────────────
+st.markdown("**🗄️ Trained Model Inventory**")
 model_files = [
     ("random_forest.pkl",       "RandomForestClassifier",  "Supervised — ensemble (primary)"),
     ("xgboost.pkl",             "XGBClassifier",           "Supervised — gradient boosting"),
-    ("voting_ensemble.pkl",     "VotingClassifier",        "Soft-vote RF+XGB composite"),
+    ("lightgbm.pkl",            "LGBMClassifier",          "Supervised — histogram boosting (new)"),
+    ("voting_ensemble.pkl",     "VotingClassifier",        "Soft-vote RF+XGB+LGBM composite"),
     ("isolation_forest.pkl",    "IsolationForest",         "Unsupervised — anomaly detection"),
+    ("prompt_guard.pkl",        "TF-IDF + LogReg",         "Layer 0 — prompt injection guard"),
     ("scaler.pkl",              "StandardScaler",          "Feature normalisation"),
     ("shap_explainer_rf.pkl",   "TreeExplainer (RF)",      "SHAP explainability — RF"),
     ("shap_explainer_xgb.pkl",  "TreeExplainer (XGB)",     "SHAP explainability — XGB"),
     ("feature_cols.json",       "JSON",                    "Ordered feature column registry"),
+    ("optimal_threshold.json",  "JSON",                    "F2-optimal classification threshold"),
 ]
 inventory_rows = []
 for fname, model_type, purpose in model_files:

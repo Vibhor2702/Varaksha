@@ -40,6 +40,30 @@ try:
 except Exception:
     pass  # training not run yet; contributions omitted from early demos
 
+# ── PromptGuard (Layer 0 — inline injection guard for LLM narration) ─────────
+_GUARD_AVAILABLE = False
+try:
+    from services.local_engine.prompt_guard import is_injection as _is_injection
+    _GUARD_AVAILABLE = True
+except Exception:
+    pass  # guard gracefully absent if not yet trained
+
+
+def _check_injection(text: str, field_name: str) -> None:
+    """
+    Raise ValueError if `text` looks like a prompt injection attempt.
+    Guards the LLM narration layer against adversarial transaction metadata.
+    Only called when PromptGuard model is available.
+    """
+    if not _GUARD_AVAILABLE:
+        return
+    if _is_injection(text):
+        log.warning("PromptGuard blocked potential injection in field '%s': %.60s…", field_name, text)
+        raise ValueError(
+            f"Potential prompt injection detected in field '{field_name}'. "
+            "Transaction alert generation aborted for security."
+        )
+
 log = logging.getLogger("varaksha.agent03")
 
 AUDIO_DIR = pathlib.Path(__file__).resolve().parents[2] / "data" / "audio_alerts"
@@ -203,6 +227,16 @@ async def generate_alert(tx: FlaggedTransaction) -> AlertResult:
     Returns an AlertResult ready for the Streamlit dashboard.
     """
     log.info("Generating alert for transaction %s (score=%.2f)", tx.transaction_id, tx.risk_score)
+
+    # Layer 0: PromptGuard — check user-controlled string fields before LLM narration
+    # Merchant names, graph flags, and descriptions could contain injected instructions
+    for _field, _value in [
+        ("merchant_category", tx.merchant_category),
+        ("transaction_id",    tx.transaction_id),
+    ]:
+        _check_injection(str(_value), _field)
+    for _flag in tx.graph_flags:
+        _check_injection(str(_flag), "graph_flags")
 
     laws = _build_law_citations(tx)
 
