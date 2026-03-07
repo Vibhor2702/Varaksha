@@ -1,1 +1,1 @@
-["type", "amount", "log_amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest", "errorBalanceOrig", "errorBalanceDest", "is_orig_drained", "is_dest_zero_before", "amount_to_orig_ratio", "step"]
+["Transaction_Type", "Payment_Gateway", "Transaction_Status", "Device_OS", "Merchant_Category", "Transaction_Channel", "Transaction_Frequency", "Days_Since_Last_Transaction", "Transaction_Amount_Deviation", "amount", "log_amount", "hour_of_day", "day_of_week"]

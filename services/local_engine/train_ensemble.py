@@ -184,6 +184,85 @@ def _detect_paysim(df: pd.DataFrame) -> bool:
     paysim_cols = {"step", "type", "nameOrig", "nameDest", "oldbalanceOrg", "isFraud"}
     return paysim_cols.issubset(set(df.columns))
 
+
+# ── Paper dataset (Sadaf & Manivannan) feature columns & engineering ──────────
+# These are the exact features from the paper's UPI transaction dataset.
+# Paper used 660 records; this CSV has 647 rows, fraud=155 (23.95%)
+# Paper result without SMOTE: 65% recall, ROC-AUC 85.12%
+
+PAPER_CATEGORICAL = [
+    "Transaction_Type",      # Refund, Bank Transfer, Subscription, etc.
+    "Payment_Gateway",       # SamplePay, Sigma Bank, Other, etc.
+    "Transaction_Status",    # Completed, Pending, Failed
+    "Device_OS",             # Android, Windows, MacOS, iOS
+    "Merchant_Category",     # Investment, Utilities, Brand Vouchers, etc.
+    "Transaction_Channel",   # In-store, Mobile, Online
+]
+PAPER_NUMERICAL = [
+    # Paper's core behavioural features (explicitly mentioned in methodology)
+    "Transaction_Frequency",        # how many tx in recent window — velocity signal
+    "Days_Since_Last_Transaction",  # recency — sudden activity after dormancy = fraud signal
+    "Transaction_Amount_Deviation", # how much this tx deviates from customer's avg amount
+    # Financial
+    "amount",
+    "log_amount",           # we add this — paper skipped log transform (skew)
+    # Time features extracted from Date/Time columns
+    "hour_of_day",          # late-night transactions are higher risk
+    "day_of_week",          # weekend/weekday pattern
+]
+
+
+def engineer_paper_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Engineer features from the Sadaf & Manivannan UPI transaction CSV.
+
+    The paper used 660 UPI records with 23 attributes.  This function:
+    1. Parses Date + Time into hour_of_day / day_of_week (paper's "temporal" features)
+    2. Adds log_amount to correct the right skew the paper ignored
+    3. Renames the 'fraud' target column to the system-wide 'is_fraud'
+    4. Drops high-cardinality ID columns (Transaction_ID, Merchant_ID, Customer_ID,
+       Device_ID, IP_Address, Transaction_City, Transaction_State) that are unique
+       per row and would cause the model to memorise rather than generalise
+
+    Why the paper got 65% recall (our hypothesis):
+    - No SMOTE: 492 legit vs 155 fraud → model biased toward majority class
+    - Default threshold 0.5 on imbalanced data misses many fraud cases
+    - We fix both: SMOTE in train_ensemble + F2-optimised threshold
+    """
+    df = df.copy()
+
+    # Parse time features from Date (DD/MM/YY or DD/MM/YYYY) and Time (HH:MM:SS)
+    try:
+        dt = pd.to_datetime(df["Date"].astype(str) + " " + df["Time"].astype(str),
+                            dayfirst=True, errors="coerce")
+        df["hour_of_day"] = dt.dt.hour.fillna(12).astype(int)
+        df["day_of_week"] = dt.dt.dayofweek.fillna(0).astype(int)
+    except Exception:
+        df["hour_of_day"] = 12
+        df["day_of_week"] = 0
+
+    # Log-transform amount (skewed distribution — paper did not do this)
+    df["log_amount"] = np.log1p(df["amount"])
+
+    # Rename target to system standard
+    if "fraud" in df.columns and TARGET not in df.columns:
+        df.rename(columns={"fraud": TARGET}, inplace=True)
+
+    fraud_rate = df[TARGET].mean()
+    log.info(
+        "Paper dataset after feature engineering: %d rows | fraud=%d (%.2f%%)",
+        len(df), int(df[TARGET].sum()), 100 * fraud_rate,
+    )
+    return df
+
+
+def _detect_paper_dataset(df: pd.DataFrame) -> bool:
+    """Return True if this looks like the Sadaf & Manivannan UPI CSV."""
+    paper_cols = {"Transaction_Frequency", "Days_Since_Last_Transaction",
+                  "Transaction_Amount_Deviation", "Payment_Gateway", "fraud"}
+    return paper_cols.issubset(set(df.columns))
+
+
 # ── Synthetic dataset generator ───────────────────────────────────────────────
 
 def _make_synthetic_dataset(n_rows: int = 10_000, fraud_rate: float = 0.025) -> pd.DataFrame:
@@ -700,8 +779,14 @@ def main(data_path: str | None = None) -> None:
             )
             cat_cols = PAYSIM_CATEGORICAL
             num_cols = PAYSIM_NUMERICAL
+        elif _detect_paper_dataset(df_raw):
+            log.info("Detected paper UPI dataset (Sadaf & Manivannan) — applying feature engineering …")
+            df = engineer_paper_features(df_raw)
+            cat_cols = PAPER_CATEGORICAL
+            num_cols = PAPER_NUMERICAL
         else:
-            df.rename(columns={"isFraud": TARGET, "Amount": "amount"}, inplace=True, errors="ignore")
+            df_raw.rename(columns={"isFraud": TARGET, "Amount": "amount"}, inplace=True, errors="ignore")
+            df      = df_raw
             cat_cols, num_cols = CATEGORICAL, NUMERICAL
     else:
         log.warning("No CSV supplied — using 10 000-row synthetic dataset")
@@ -765,7 +850,7 @@ def main(data_path: str | None = None) -> None:
     print(f"\n{'═'*60}")
     print("  TRAINING SUMMARY")
     print(f"{'═'*60}")
-    print(f"  Dataset    : {'PaySim (real)' if paysim_mode else 'Synthetic'}")
+    print(f"  Dataset    : {'PaySim (real)' if paysim_mode else 'Paper UPI (Sadaf & Manivannan)' if cat_cols == PAPER_CATEGORICAL else 'Synthetic'}")
     print(f"  Features   : {len(feature_cols)} ({', '.join(feature_cols[:4])} …)")
     print(f"  Fraud rate : {100*fraud_rate:.4f}%")
     print(f"  Opt thresh : {opt_threshold:.4f} (F2-maximising)")
