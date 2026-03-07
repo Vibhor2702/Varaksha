@@ -20,6 +20,7 @@
     - [Phase 4 — Warning Cleanup](#phase-4--warning-cleanup)
     - [Phase 5 — Launch \& End-to-End Test](#phase-5--launch--end-to-end-test)
     - [Phase 6 — Repository Restructuring](#phase-6--repository-restructuring)
+    - [Phase 7 — Security Architecture Upgrade (GATE-M + SLSA)](#phase-7--security-architecture-upgrade-gate-m--slsa)
   - [Directory Map \& Purpose of Every File](#directory-map--purpose-of-every-file)
   - [Architecture Deep-Dive](#architecture-deep-dive)
     - [Why Rust for the Gateway?](#why-rust-for-the-gateway)
@@ -1085,8 +1086,194 @@ or a shared KV store would be needed in production.
 
 ---
 
-*Last updated: March 5, 2026. Phase 6 complete — repository fully restructured
-into clean professional layout. All services confirmed live before and after
-restructuring. Cargo build validated from `gateway/rust-core/`. Python module
-resolution validated: `from services.agents import agent01_profiler` resolves
-to `data/models/isolation_forest.pkl` correctly.*
+---
+
+### Phase 7 — Security Architecture Upgrade (GATE-M + SLSA)
+
+*March 6–7, 2026.*
+
+After the repository restructure, the honest answer to "how secure is this?"
+was: the runtime is solid (Rust gateway, Ed25519, rate limiting), but the
+*supply chain* — the code that gets written by AI agents and merged into the
+repo — had no hardened defence. This phase fixed that.
+
+The trigger was a question during demo prep: *"what do real banks use?"* The
+answer pointed to three things: HSMs (FIPS 140-2), Sigstore/SLSA provenance,
+and Falco eBPF runtime monitoring. Of those, SLSA was the most directly
+integrable and the most relevant to the GATE-M story.
+
+---
+
+**Step 1 — Dependency recovery.**
+
+Services were found to be down after the restructuring session. Missing packages
+in the `.venv`:
+
+```powershell
+pip install uvicorn joblib scikit-learn numpy fastapi httpx cryptography langgraph networkx
+```
+
+After reinstall, all four services came back up. Fraud arena re-run confirmed
+**10/10 (100%)** at **565 ms avg latency** — a 4× improvement over the previous
+2176 ms baseline, caused by the removal of the OpenAI API call from Agent 03
+(template narratives are used instead in offline mode).
+
+---
+
+**Step 2 — GATE-M Layer 2: AST Inspector (`gate/ast_inspector.py`).**
+
+The existing `sip_checker.py` had a basic `_SideEffectVisitor` that caught a
+narrow set of patterns. It was not sufficient to catch obfuscated attacks or
+cross-category exfiltration chains.
+
+`ast_inspector.py` was added as a dedicated Layer 2 scanner with six finding
+categories:
+
+| Category | What it catches |
+|----------|-----------------|
+| A — Code execution | `subprocess`, `os.system`, `os.popen`, `os.exec*`, `eval`, `exec`, `compile`, `__import__` |
+| B — Network access | `socket`, `requests`, `httpx`, `urllib`; hardcoded external URL literals |
+| C — Env exfiltration | `os.environ[...]`, `os.getenv()` read combined with a network send in the same diff |
+| D — Obfuscation | `base64` + `exec` chains, dynamic `__import__`, dynamic `compile` |
+| E — Dangerous IO | `pickle.loads`, `yaml.load` (unsafe loader), `open('/proc/*')` |
+| F — Supply chain | Inline import of an unlisted package |
+
+The cross-category C detection (env read + network call in same fragment) is the
+most important: it catches the classic AI-assist backdoor where stolen secrets
+are exfiltrated over HTTP. Neither pattern alone triggers a block, but together
+they are a CRITICAL finding.
+
+Public API: `inspect_diff(unified_diff)`, `inspect_source(source)`,
+`has_critical_findings()`, `findings_summary()`. CRITICAL findings trigger
+immediate hard-stop — no override path.
+
+---
+
+**Step 3 — OS Hooks (`security/gate-m/os_hooks/`).**
+
+Three optional monitoring backends were added. All three degrade gracefully on
+Windows and in non-privileged environments via a `NullMonitor` stub.
+
+`fanotify_monitor.py` — Linux-only, requires `CAP_SYS_ADMIN`. Uses
+`fanotify(2)` with `FAN_OPEN_PERM`: the kernel holds the `open()` syscall until
+the monitor's verdict thread responds with `FAN_ALLOW` or `FAN_DENY`. This is
+the only monitor that can *prevent* a read from completing (not just observe it
+after the fact). Implemented with ctypes syscall wrappers; no C extension needed.
+
+`inotify_monitor.py` — User-land, no root required. Uses `inotify_simple` to
+watch `IN_CREATE`, `IN_MODIFY`, `IN_CLOSE_WRITE`, `IN_DELETE`, `IN_MOVED_TO`
+events. Falls back to `sys.addaudithook` for in-process Python file opens when
+`inotify_simple` is not installed. Post-hoc only (cannot block), but sufficient
+for logging and rollback triggers.
+
+`ebpf_monitor.py` — Root + BCC required. Attaches kprobes on `__x64_sys_openat`,
+`__x64_sys_execve`, and `__x64_sys_connect`. The BPF C program is embedded as a
+string and compiled at runtime. Perf buffer polling in a background thread
+surfaces events via callback. Catches the full syscall layer — any subprocess
+or outbound connection made by any process, not just Python.
+
+`os_hooks/__init__.py` provides a `get_monitor(backend, allowed_paths, on_violation)`
+factory that selects the appropriate backend and returns `NullMonitor` on
+any platform/permission failure.
+
+---
+
+**Step 4 — SLSA Supply-Chain Pipeline (`security/slsa/`).**
+
+Three scripts implement a SLSA Level 2 pipeline:
+
+`generate_provenance.py` — Produces a signed provenance document following the
+in-toto Statement v0.1 / SLSA predicate v0.2 spec exactly. Key design decision:
+the provenance includes a `varaksha_ext` block with a `gate_m_task_id` field.
+This field records the UUID of the GATE-M approval that authorized the build.
+The result: every artifact can be traced back to a human-reviewed GATE-M decision.
+Materials: git commit SHA + SHA-256 of `Cargo.lock` and `requirements.txt`.
+
+`sign_artifact.py` — Ed25519 signing using the `cryptography` library (the same
+scheme used by the gateway). The signed payload is:
+```
+SHA256(artifact) || SHA256(provenance) || signed_at (UTF-8)
+```
+Output is a JSON envelope `<artifact>.sig` containing the signature in
+base64url, the signer fingerprint, both SHA-256s, and the timestamp. Keys are
+stored in `security/slsa/.keys/` (gitignored). A new keypair is auto-generated
+if none exists — in production this would be replaced with an HSM or cloud KMS.
+
+`verify_artifact.py` — Four-point verification:
+1. Artifact SHA-256 matches both the sig envelope and the provenance subject digest.
+2. Ed25519 signature is valid against the public key.
+3. Provenance self-hash is intact (the file hasn't been modified since signing).
+4. `gate_m_task_id` is present and non-empty (build is traceable to GATE-M).
+
+All four must pass for `VerificationResult.ok = True`. Individual failure reasons
+are surfaced for CI/CD reporting.
+
+`examples/pipeline_simulation.py` — Runs the complete 5-step pipeline:
+GATE-M review → build (simulated artifact) → provenance generation → signing
+→ verification. Each step prints a structured pass/fail line.
+
+`examples/run_pipeline.ps1` — PowerShell wrapper; locates the `.venv` Python,
+forwards `--gate-m-task-id` and `--output-dir` args, reports elapsed time and
+exit code with colour.
+
+---
+
+**Step 5 — Supply Chain Arena (`security_battleground/arenas/supply_chain_arena.py`).**
+
+9 tests, each targeting a specific attack vector:
+
+| ID | Attack | Layer | Detection |
+|----|--------|-------|----------|
+| SC001 | `import subprocess; subprocess.run([...])` | 2 | AST — Category A |
+| SC002 | Write to `../../gateway/src/auth.rs` | 1 | Scope — path traversal |
+| SC003 | `eval(request.body)` inserted | 2 | AST — Category A |
+| SC004 | `requests.get("https://evil.example.com/...")` | 2 | AST — Category B |
+| SC005 | `os.environ["SIGNING_KEY"]` + `requests.post(...)` | 2 | AST — Category C (cross) |
+| SC006 | `exec(base64.b64decode(...))` | 2 | AST — Category D |
+| SC007 | Write to `services/agents/.env` | 1 | Scope — forbidden glob |
+| SC008 | `verify_gateway_signature = lambda _: True` (bypass) | 2 | AST — regex pattern |
+| SC009 | `if risk is None: risk = 0.0` (safe patch) | — | APPROVED — no false positive |
+
+Result: **9/9 (100%)** — all attacks blocked at the correct layer, safe patch
+approved with no false positive. Avg scan time: **0.15 ms**.
+
+The arena runs in `SafeKernelProxy` mode on Windows (no GATEKernel OS watchers),
+and falls back to regex scanning when `gate.ast_inspector` cannot be imported.
+Both paths produce identical results for these test cases.
+
+---
+
+**Step 6 — Runner update (`security_battleground/runner.py`).**
+
+Added `supply_chain` as a fourth arena:
+- `--arena supply_chain|all` added to argparse.
+- `run_supply_chain_arena()` function added.
+- `supply_chain_integrity_rate: float` field added to `BattlegroundReport`.
+- Supply chain section added to `print_scoreboard()` — shows per-test layer +
+  check-type columns.
+- `write_report()` now includes a supply chain `ArenaSummary` in the JSON output.
+
+---
+
+**Step 7 — Architecture documentation (`docs/security_architecture.md`).**
+
+A standalone reference document covering:
+- 4-service pipeline ASCII diagram
+- GATE-M 5-layer enforcement flow (with which layer catches what)
+- OS hooks capability table
+- SLSA pipeline flow (generate → sign → verify)
+- Threat model table (in-scope vs. out-of-scope threats with honest caveats)
+- Complete file map of the security subdirectory
+
+---
+
+**Commit:** `5f9b498` — "security: SLSA supply chain + GATE-M OS hooks + AST
+inspector + supply chain arena" — 15 files, 3154 insertions, pushed to `main`.
+
+---
+
+*Last updated: March 7, 2026. Phase 7 complete — full supply-chain security
+layer added: GATE-M AST inspector (6 threat categories), OS monitoring hooks
+(fanotify / inotify / eBPF), SLSA Level 2 pipeline (provenance + Ed25519 sign
++ 4-point verify), supply chain arena 9/9 (100%), and architecture reference
+document. Fraud arena still 10/10 at 565 ms. All changes pushed to main.*
