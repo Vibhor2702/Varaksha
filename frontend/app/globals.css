@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base Resets ──────────────────────────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Cursor defaults for data-dense UI */
+  body {
+    cursor: default;
+  }
+
+  /* Selection highlight uses saffron accent */
+  ::selection {
+    background-color: rgb(212 80 10 / 0.18);
+    color: #1c1610;
+  }
+}
