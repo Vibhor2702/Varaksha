@@ -160,6 +160,12 @@ export function LegalReport() {
   const langObj = LANGUAGES.find((l) => l.code === language)!;
   const alertT  = ALERT_TEXT[language];
 
+  // ── Reset audio whenever language changes ────────────────────────────────
+  useEffect(() => {
+    setIsPlaying(false);
+    setProgress(0);
+  }, [language]);
+
   // ── Audio player logic ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!isPlaying) return;
@@ -275,23 +281,38 @@ export function LegalReport() {
           </div>
 
           {/* ── Language selector ── */}
-          <div className="flex items-center gap-1.5 flex-wrap mb-5">
-            <span className="font-barlow text-[0.48rem] tracking-widest uppercase text-cream/20 mr-1">
-              Alert language
-            </span>
-            {LANGUAGES.map((l) => (
-              <button
-                key={l.code}
-                onClick={() => setLanguage(l.code)}
-                className={`px-2 py-0.5 font-barlow text-[0.58rem] tracking-wide transition-colors ${
-                  language === l.code
-                    ? "bg-saffron/15 border border-saffron/35 text-saffron"
-                    : "border border-cream/10 text-cream/30 hover:border-cream/20 hover:text-cream/50"
-                }`}
-              >
-                {l.name}
-              </button>
-            ))}
+          <div className="border border-cream/[0.06] bg-cream/[0.015] p-3 mb-5">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="font-barlow text-[0.48rem] tracking-widest uppercase text-cream/25">
+                Alert language
+              </span>
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={language}
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  className="font-courier text-[0.52rem] text-saffron/60"
+                >
+                  {langObj.voiceLabel} Neural MT + edge-tts
+                </motion.span>
+              </AnimatePresence>
+            </div>
+            <div className="flex gap-1 flex-wrap">
+              {LANGUAGES.map((l) => (
+                <button
+                  key={l.code}
+                  onClick={() => setLanguage(l.code)}
+                  className={`px-2.5 py-1 font-barlow text-[0.62rem] tracking-wide transition-all duration-200 ${
+                    language === l.code
+                      ? "bg-saffron/15 border border-saffron/40 text-saffron shadow-[0_0_8px_rgba(217,119,6,0.15)]"
+                      : "border border-cream/[0.08] text-cream/35 hover:border-cream/20 hover:text-cream/55"
+                  }`}
+                >
+                  {l.name}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* ── Alert card ── */}
@@ -388,9 +409,22 @@ export function LegalReport() {
                 </div>
               </div>
 
-              <p className="font-barlow text-[0.48rem] tracking-widest uppercase text-cream/16 mt-3">
-                Simulated audio &middot; Neural MT &middot; {langObj.voiceLabel} &middot; edge-tts
-              </p>
+              <div className="flex items-center justify-between mt-3">
+                <p className="font-barlow text-[0.48rem] tracking-widest uppercase text-cream/16">
+                  Simulated audio &middot; edge-tts
+                </p>
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={language}
+                    initial={{ opacity: 0, x: 6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="font-courier text-[0.5rem] text-saffron/35"
+                  >
+                    {langObj.voiceLabel} Neural
+                  </motion.p>
+                </AnimatePresence>
+              </div>
             </div>
           </div>
 
@@ -518,7 +552,7 @@ export function LegalReport() {
               { step: "01", label: "SHA-256 VPA Hash",     detail: "Privacy-preserving · no raw PII" },
               { step: "02", label: "ML Ensemble Score",    detail: "RF=0.89  ·  XGB=0.91  →  0.90" },
               { step: "03", label: "Gateway Verdict Log",  detail: "Timestamped  ·  immutable" },
-              { step: "04", label: "Multilingual Alert",  detail: `${langObj.voiceLabel} Neural MT delivery  ·  MP3` },
+              { step: "04", label: "Alert Delivery",      detail: `${langObj.voiceLabel} Neural MT  ·  edge-tts MP3` },
             ].map((e) => (
               <div key={e.step} className="flex gap-3 mb-3.5 last:mb-0">
                 <span className="font-courier text-[0.58rem] text-saffron/35 shrink-0 pt-px">
