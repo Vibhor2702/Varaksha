@@ -30,8 +30,8 @@ External UPI Client
                     ┌──────────────────────────┐
                     │  Layer 4                 │
                     │  Accessible Alert Agent  │
-                    │  LLM + Mock-Bhashini NMT │
-                    │  + edge-tts Hindi MP3    │
+                    │  LLM + Multilingual NMT  │
+                    │  + edge-tts (8 languages)│
                     └──────────────────────────┘
                                 │
                                 ▼
@@ -175,7 +175,7 @@ varaksha/
 
 - **Privacy:** VPAs are SHA-256 hashed before entering the Rust process. Raw PII never touches the cache.
 - **Latency:** Graph analytics (heavy) run async, completely outside the payment path. The Rust DashMap lookup is the only thing in the hot path.
-- **Accessibility:** `edge-tts` requires no API key — uses the free Microsoft Edge TTS endpoint. The Bhashini NMT stub is clearly marked for replacement with the real API.
+- **Accessibility:** `edge-tts` requires no API key — uses the free Microsoft Edge TTS endpoint. Multilingual NMT templates cover 8 Indian languages (EN, HI, TA, TE, BN, MR, GU, KN); swap `_translate_warning()` in `agent03_accessible_alert.py` for a real NMT API (e.g. IndicTrans2 or any ULCA-compliant service) in production.
 - **SMOTE boundary:** Applied to the training split *only* — the test set always reflects the real class distribution.
 
 ---

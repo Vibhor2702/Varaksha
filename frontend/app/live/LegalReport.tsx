@@ -15,21 +15,83 @@ const AUDIO_STEP_PCT      = 100 / (AUDIO_DURATION_MS / AUDIO_TICK_MS);
 // Waveform bar heights — fixed array, no Math.random() in render
 const WAVEFORM_HEIGHTS = [4, 9, 6, 13, 8, 15, 5, 12, 7, 14, 4, 11, 6, 10, 5, 13, 8, 9, 4, 12];
 
-// ── Legal report text blob ────────────────────────────────────────────────────
-// This is downloaded as a .txt evidence file when the button is clicked.
+// ── Supported languages ────────────────────────────────────────────────────
+const LANGUAGES = [
+  { code: "en", name: "English",   voiceLabel: "en-IN" },
+  { code: "hi", name: "हिंदी",     voiceLabel: "hi-IN" },
+  { code: "ta", name: "தமிழ்",    voiceLabel: "ta-IN" },
+  { code: "te", name: "తెలుగు",   voiceLabel: "te-IN" },
+  { code: "bn", name: "বাংলা",    voiceLabel: "bn-IN" },
+  { code: "mr", name: "मराठी",    voiceLabel: "mr-IN" },
+  { code: "gu", name: "ગુજરાતી",  voiceLabel: "gu-IN" },
+  { code: "kn", name: "ಕನ್ನಡ",   voiceLabel: "kn-IN" },
+] as const;
 
-const REPORT_TEXT = `
+type LangCode = typeof LANGUAGES[number]["code"];
+
+// ── Per-language personalised alert text ──────────────────────────────────
+const ALERT_TEXT: Record<LangCode, { primary: string; secondary: string }> = {
+  en: {
+    primary:   "This transaction is suspicious. Your money is secure.",
+    secondary: "₹99,999 suspicious payment blocked. High-value transfer at 3 AM from new device detected. Please contact your bank immediately and file a complaint at cybercrime.gov.in — Helpline: 1930.",
+  },
+  hi: {
+    primary:   "यह लेनदेन संदिग्ध है। आपके पैसे सुरक्षित हैं।",
+    secondary: "₹99,999 का संदिग्ध लेन-देन TXN20260310-00842 रोका गया। रात के 3 बजे नए डिवाइस से उच्च राशि का लेनदेन। कृपया अपने बैंक से संपर्क करें — साइबर अपराध हेल्पलाइन: 1930।",
+  },
+  ta: {
+    primary:   "இந்த பரிவர்த்தனை சந்தேகக்கூடியது. உங்கள் பணம் பாதுகாப்பாக உள்ளது.",
+    secondary: "₹99,999 சந்தேகக்கூடிய பரிவர்த்தனை TXN20260310-00842 தடுக்கப்பட்டது. இரவு 3 மணிக்கு புதிய சாதனத்தில் அதிக தொகை பரிமாற்றம். cybercrime.gov.in — உதவி எண்: 1930.",
+  },
+  te: {
+    primary:   "ఈ లావాదేవీ అనుమానాస్పదంగా ఉంది. మీ డబ్బు సురక్షితంగా ఉంది.",
+    secondary: "₹99,999 అనుమానాస్పద లావాదేవీ TXN20260310-00842 నిరోధించబడింది. రాత్రి 3 గంటలకు కొత్త పరికరం నుండి అధిక మొత్తం బదిలీ. cybercrime.gov.in — హెల్ప్‌లైన్: 1930.",
+  },
+  bn: {
+    primary:   "এই লেনদেন সন্দেহজনক। আপনার টাকা নিরাপদ।",
+    secondary: "₹99,999 সন্দেহজনক লেনদেন TXN20260310-00842 আটকানো হয়েছে। রাত ৩টায় নতুন ডিভাইস থেকে উচ্চ পরিমাণ স্থানান্তর। cybercrime.gov.in — হেল্পলাইন: 1930।",
+  },
+  mr: {
+    primary:   "हे व्यवहार संशयास्पद आहे। तुमचे पैसे सुरक्षित आहेत.",
+    secondary: "₹99,999 चा संशयास्पद व्यवहार TXN20260310-00842 थांबवला. रात्री 3 वाजता नवीन उपकरणावरून उच्च रक्कम हस्तांतरण. cybercrime.gov.in — हेल्पलाइन: 1930.",
+  },
+  gu: {
+    primary:   "આ વ્યવહાર શંકાસ્પદ છે. તમારા પૈસા સુરક્ષિત છે.",
+    secondary: "₹99,999 ની શંકાસ્પદ ચૂકવણી TXN20260310-00842 અટકાવ્યો. રાત્રે 3 વાગ્યે નવા ઉપકરણ પર ઊંચી રકમ ટ્રાન્સફર. cybercrime.gov.in — હેલ્પલાઇન: 1930.",
+  },
+  kn: {
+    primary:   "ಈ ವ್ಯವಹಾರ ಅನುಮಾನಾಸ್ಪದವಾಗಿದೆ. ನಿಮ್ಮ ಹಣ ಸುರಕ್ಷಿತವಾಗಿದೆ.",
+    secondary: "₹99,999 ಅನುಮಾನಾಸ್ಪದ ವ್ಯವಹಾರ TXN20260310-00842 ತಡೆದಿದೆ. ರಾತ್ರಿ 3 ಗಂಟೆಗೆ ಹೊಸ ಸಾಧನದಿಂದ ಹೆಚ್ಚಿನ ಮೊತ್ತ ವರ್ಗಾವಣೆ. cybercrime.gov.in — ಹೆಲ್ಪ್‌ಲೈನ್: 1930.",
+  },
+};
+
+// ── Personalised downloadable report (language-aware) ─────────────────────
+function buildReport(lang: LangCode): string {
+  const langObj     = LANGUAGES.find((l) => l.code === lang)!;
+  const alertT      = ALERT_TEXT[lang];
+  const langSection = lang === "en"
+    ? ""
+    : `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ALERT NOTIFICATION  —  ${langObj.name}  (${langObj.voiceLabel} Neural MT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${alertT.primary}
+
+${alertT.secondary}
+`;
+
+  return `
 VARAKSHA FRAUD INTELLIGENCE NETWORK
 Legal Evidence Report  —  Auto-Generated
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Case Reference : TXN20260310-BLOCK-00842
 Generated      : 2026-03-10T03:14:07Z  (IST)
+Alert Language : ${langObj.name}  (${langObj.voiceLabel})
 Classification : BLOCKED — HIGH RISK
 System Version : Varaksha V2  ·  NPCI Hackathon 2026  ·  Blue Team
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TRANSACTION DETAILS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Transaction ID  : TXN20260310-00842
 Sender VPA      : suraj.thakur@okicici
 Receiver VPA    : cash.agent.77@paytm
@@ -40,20 +102,18 @@ Device Status   : FIRST-SEEN  (new device fingerprint)
 
 VERDICT        : BLOCK
 Risk Score     : 0.90 / 1.00  (RF: 0.89  ·  IsolationForest: 0.91)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FRAUD SIGNALS DETECTED
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  1.  Off-hours transaction: 03:14 IST  (HOUR_SIN = -0.99 — deep anomaly)
  2.  High-value transfer exceeding ₹50,000 threshold  (AMOUNT_LOG = 11.51)
  3.  First-seen device fingerprint  (new device flag: TRUE)
  4.  Receiver VPA pattern "cash.agent.77" — synthetic mule indicator
  5.  ML composite score: 0.90  (Random Forest 0.89 · IsolationForest 0.91)
  6.  Merchant category "Finance" — elevated risk category
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 APPLICABLE LEGAL PROVISIONS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Bharatiya Nyaya Sanhita (BNS) §318(4)
     Cheating by impersonation — Punishment: Imprisonment up to 7 years + fine
 
@@ -63,20 +123,19 @@ APPLICABLE LEGAL PROVISIONS
 
   Prevention of Money Laundering Act (PMLA) §3
     Projecting proceeds of crime as untainted property
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SYSTEM EVIDENCE CHAIN
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SHA-256(suraj.thakur@okicici) : 7f3a9c12e803b5d1902871ea6cd048f3...
 Consortium Cache               : HIT — Risk delta: 0.90 written to DashMap
 Graph Analysis                 : Off-path async — pending corroboration
-Alert Delivery                 : Bhashini NMT (hi-IN) + edge-tts MP3
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Alert Delivery                 : Neural MT (${langObj.voiceLabel}) + edge-tts MP3${langSection}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CERTIFYING SYSTEM : Varaksha V2 Fraud Intelligence Network
                     NPCI Hackathon 2026  ·  Blue Team  ·  DEMONSTRATION ONLY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `.trimStart();
+}
 
 // ── Formatting helper: mm:ss ──────────────────────────────────────────────────
 function fmtTime(pct: number): string {
@@ -96,6 +155,10 @@ export function LegalReport() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress,  setProgress ] = useState(0);
   const [dlState,   setDlState  ] = useState<DlState>("idle");
+  const [language,  setLanguage ] = useState<LangCode>("hi");
+
+  const langObj = LANGUAGES.find((l) => l.code === language)!;
+  const alertT  = ALERT_TEXT[language];
 
   // ── Audio player logic ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -127,7 +190,7 @@ export function LegalReport() {
     if (dlState === "generating") return;
     setDlState("generating");
     setTimeout(() => {
-      const blob = new Blob([REPORT_TEXT], { type: "text/plain;charset=utf-8" });
+      const blob = new Blob([buildReport(language)], { type: "text/plain;charset=utf-8" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
@@ -139,7 +202,7 @@ export function LegalReport() {
       setDlState("done");
       setTimeout(() => setDlState("idle"), 3500);
     }, 1600);
-  }, [dlState]);
+  }, [dlState, language]);
 
   const durationStr = `0:${String(Math.round(AUDIO_DURATION_MS / 1000)).padStart(2, "0")}`;
 
@@ -154,9 +217,9 @@ export function LegalReport() {
             Module E — Legal Report & Accessible Alert
           </span>
         </div>
-        <span className="font-courier text-[0.52rem] text-cream/18">
-          BNS §318(4) &middot; IT Act §66D
-        </span>
+          <span className="font-courier text-[0.52rem] text-cream/18">
+            BNS §318(4) &middot; IT Act §66D
+          </span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-0 divide-y lg:divide-y-0 lg:divide-x divide-cream/[0.07]">
@@ -187,7 +250,7 @@ export function LegalReport() {
           <div className="border border-block/10 bg-block/[0.03] mb-6">
             {[
               { label: "TRANSACTION",  value: "TXN20260310-00842" },
-              { label: "FROM",         value: "suraj.thakur@okicici" },
+          { label: "FROM",         value: "suraj.thakur@okicici" },
               { label: "TO",           value: "cash.agent.77@paytm" },
               { label: "AMOUNT",       value: "₹99,999.00" },
               { label: "TIME",         value: "03:14:07 IST  (off-hours)" },
@@ -211,11 +274,31 @@ export function LegalReport() {
             ))}
           </div>
 
-          {/* ── Bhashini Hindi alert ── */}
+          {/* ── Language selector ── */}
+          <div className="flex items-center gap-1.5 flex-wrap mb-5">
+            <span className="font-barlow text-[0.48rem] tracking-widest uppercase text-cream/20 mr-1">
+              Alert language
+            </span>
+            {LANGUAGES.map((l) => (
+              <button
+                key={l.code}
+                onClick={() => setLanguage(l.code)}
+                className={`px-2 py-0.5 font-barlow text-[0.58rem] tracking-wide transition-colors ${
+                  language === l.code
+                    ? "bg-saffron/15 border border-saffron/35 text-saffron"
+                    : "border border-cream/10 text-cream/30 hover:border-cream/20 hover:text-cream/50"
+                }`}
+              >
+                {l.name}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Alert card ── */}
           <div className="border border-saffron/15 bg-saffron/[0.033] p-5 mb-6">
             <div className="flex items-center gap-2 mb-4">
               <span className="font-barlow text-[0.52rem] tracking-[0.28em] uppercase text-saffron/45">
-                Bhashini NMT &middot; hi-IN Translation
+                Neural MT &middot; {langObj.voiceLabel} Translation
               </span>
               <div className="flex-1 h-px bg-saffron/10" />
               <span className="font-barlow text-[0.48rem] tracking-widest uppercase text-saffron/25">
@@ -223,19 +306,17 @@ export function LegalReport() {
               </span>
             </div>
 
-            {/* Primary — Hindi */}
+            {/* Primary — translated alert */}
             <p
               className="text-cream leading-[1.9] mb-2"
               style={{ fontSize: "clamp(1rem, 2vw, 1.2rem)", fontFamily: "sans-serif" }}
             >
-              यह लेनदेन संदिग्ध है। आपके पैसे सुरक्षित हैं।
+              {alertT.primary}
             </p>
 
-            {/* Secondary — extended translated alert */}
+            {/* Secondary — extended personalised alert */}
             <p className="font-barlow text-[0.78rem] text-cream/40 leading-relaxed mb-5">
-              ₹99,999 का संदिग्ध लेन-देन रोका गया।
-              रात के 3 बजे नए डिवाइस से उच्च राशि का लेनदेन।
-              कृपया अपने बैंक से संपर्क करें।
+              {alertT.secondary}
             </p>
 
             {/* ── Audio player ── */}
@@ -308,7 +389,7 @@ export function LegalReport() {
               </div>
 
               <p className="font-barlow text-[0.48rem] tracking-widest uppercase text-cream/16 mt-3">
-                Simulated audio &middot; edge-tts &middot; hi-IN &middot; Bhashini NMT
+                Simulated audio &middot; Neural MT &middot; {langObj.voiceLabel} &middot; edge-tts
               </p>
             </div>
           </div>
@@ -437,7 +518,7 @@ export function LegalReport() {
               { step: "01", label: "SHA-256 VPA Hash",     detail: "Privacy-preserving · no raw PII" },
               { step: "02", label: "ML Ensemble Score",    detail: "RF=0.89  ·  XGB=0.91  →  0.90" },
               { step: "03", label: "Gateway Verdict Log",  detail: "Timestamped  ·  immutable" },
-              { step: "04", label: "Bhashini Alert",       detail: "hi-IN delivery receipt  ·  MP3" },
+              { step: "04", label: "Multilingual Alert",  detail: `${langObj.voiceLabel} Neural MT delivery  ·  MP3` },
             ].map((e) => (
               <div key={e.step} className="flex gap-3 mb-3.5 last:mb-0">
                 <span className="font-courier text-[0.58rem] text-saffron/35 shrink-0 pt-px">
