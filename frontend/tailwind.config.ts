@@ -9,17 +9,18 @@ const config: Config = {
   theme: {
     extend: {
       // ── Brand Colors ──────────────────────────────────────
-      // Cream (#F7F2E8): page background
-      // Ink  (#1C1610): primary text & dark surfaces
-      // Saffron (#D4500A): accent / primary action
-      // Allow (#2D7A3E): verdict green
-      // Block (#C0392B): verdict red
+      // Cream (#F0F4F8): cold off-white page background
+      // Ink  (#0F1E2E): deep navy primary text & dark surfaces
+      // Saffron (#2563EB): denim blue accent / primary action
+      // Allow (#0D7A5F): teal-green verdict
+      // Block (#C0392B): verdict red (universal danger)
       colors: {
-        cream: "#F7F2E8",
-        ink: "#1C1610",
-        saffron: "#D4500A",
-        allow: "#2D7A3E",
+        cream: "#F0F4F8",
+        ink: "#0F1E2E",
+        saffron: "#2563EB",
+        allow: "#0D7A5F",
         block: "#C0392B",
+        flag: "#D97706",   // amber — FLAG verdict only
       },
 
       // ── Brand Typefaces ───────────────────────────────────

@@ -57,13 +57,13 @@ export default function RootLayout({
     >
       {/*
        * font-barlow  → body copy
-       * bg-cream     → #F7F2E8 parchment base
-       * text-ink     → #1C1610 near-black
+       * bg-cream     → #F0F4F8 cold off-white base
+       * text-ink     → #0F1E2E deep navy
        * antialiased  → subpixel rendering
        */}
       <body className="bg-cream text-ink font-barlow antialiased">
         {/* ── Site-wide navigation ── */}
-        <nav className="sticky top-0 z-50 border-b border-ink/10 bg-cream/90 backdrop-blur-sm">
+        <nav className="sticky top-0 z-50 border-b border-ink/10 bg-cream/90 backdrop-blur-sm shadow-[0_1px_18px_rgba(15,30,46,0.07)]">
           <div className="max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between h-11">
             <Link
               href="/"

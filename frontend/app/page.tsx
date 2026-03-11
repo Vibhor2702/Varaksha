@@ -55,10 +55,10 @@ const metrics = [
   },
   {
     kicker: "Model Performance",
-    value: "94.4%",
+    value: "96.52%",
     label: "Random Forest Accuracy",
-    sub: "75K rows · 4 real datasets",
-    source: "Varaksha V2 · trained Mar 2026",
+    sub: "111K rows · 7 real datasets",
+    source: "Varaksha · trained Mar 2026",
     accent: "bg-allow",           // green top-bar
     valueColor: "text-allow",
     colSpan: "col-span-12 md:col-span-4",
@@ -92,7 +92,7 @@ const layers = [
   { id: "L1", name: "ML Engine",      tech: "RF-300 · IsolationForest · SMOTE" },
   { id: "L2", name: "Rust Gateway",   tech: "DashMap · SHA-256 · <10ms" },
   { id: "L3", name: "Graph Agent",    tech: "NetworkX · Fan-out · Cycles" },
-  { id: "L4", name: "Alert Agent",    tech: "LLM · Bhashini NMT · TTS" },
+  { id: "L4", name: "Alert Agent",    tech: "LLM · Hindi alert · edge-tts" },
   { id: "L5", name: "Dashboard",      tech: "Real-time Verdict Stream" },
 ] as const;
 
@@ -166,7 +166,7 @@ export default function PitchPage() {
         <motion.div variants={fadeIn} className="flex items-center gap-4">
           <div className="w-14 h-[2px] bg-saffron" />
           <span className="font-barlow text-[0.62rem] tracking-[0.28em] uppercase text-ink/30">
-            Rust &middot; Random Forest &middot; IsolationForest &middot; NetworkX &middot; Bhashini
+            Rust &middot; Random Forest &middot; IsolationForest &middot; NetworkX &middot; edge-tts
           </span>
           <div className="flex-1 h-px bg-ink/10" />
         </motion.div>
@@ -196,7 +196,7 @@ export default function PitchPage() {
               key={m.value}
               variants={fadeUp}
               whileHover={{ y: -4, transition: { duration: 0.18, ease: "easeOut" } }}
-              className={`${m.colSpan} relative overflow-hidden border border-ink/[0.09] bg-white/55 hover:bg-white/80 transition-colors duration-300`}
+              className={`${m.colSpan} surface-card relative overflow-hidden border border-ink/[0.09] bg-white/55 hover:bg-white/80 transition-colors duration-300`}
             >
               {/* Coloured top accent bar */}
               <div className={`absolute inset-x-0 top-0 h-[3px] ${m.accent}`} />
@@ -212,7 +212,9 @@ export default function PitchPage() {
                   className={`font-courier font-bold leading-none ${m.valueColor} mb-2`}
                   style={{ fontSize: "clamp(2.4rem, 4.5vw, 3.8rem)" }}
                 >
-                  {m.value}
+                  {m.value.startsWith("₹")
+                    ? <><span style={{ fontSize: "0.72em" }}>₹</span>{m.value.slice(1)}</>
+                    : m.value}
                 </p>
 
                 {/* Label */}
@@ -322,6 +324,11 @@ export default function PitchPage() {
         <motion.div
           variants={fadeUp}
           className="border border-ink/12 bg-ink text-cream overflow-hidden"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(37,99,235,0.055) 1px, transparent 1px), linear-gradient(90deg, rgba(37,99,235,0.055) 1px, transparent 1px)",
+            backgroundSize: "36px 36px",
+          }}
         >
           {/* Callout header bar */}
           <div className="border-b border-cream/[0.08] px-8 py-3.5 flex justify-between items-center">

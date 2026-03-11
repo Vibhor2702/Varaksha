@@ -149,18 +149,18 @@ function deriveSandboxResult(f: SandboxForm): SandboxResult {
 function verdictBadge(v: Verdict) {
   if (v === "ALLOW") return "text-allow  bg-allow/10  border border-allow/20";
   if (v === "BLOCK") return "text-block  bg-block/10  border border-block/22";
-  return                    "text-saffron bg-saffron/10 border border-saffron/22";
+  return                    "text-flag   bg-flag/10   border border-flag/22";
 }
 
 function verdictDot(v: Verdict) {
   if (v === "ALLOW") return "bg-allow";
   if (v === "BLOCK") return "bg-block";
-  return                    "bg-saffron";
+  return                    "bg-flag";
 }
 
 function riskBar(score: number) {
   if (score >= 0.75) return "bg-block";
-  if (score >= 0.40) return "bg-saffron";
+  if (score >= 0.40) return "bg-flag";
   return                    "bg-allow";
 }
 
@@ -225,7 +225,7 @@ function IntelSandbox() {
         className={`px-5 py-3 border-b border-ink/20 flex items-center justify-between ${
           result.verdict === "ALLOW" ? "bg-allow/[0.08]" :
           result.verdict === "BLOCK" ? "bg-block/[0.08]" :
-                                       "bg-saffron/[0.07]"
+                                       "bg-flag/[0.07]"
         }`}
       >
         <div className="flex items-center gap-2.5">
@@ -250,7 +250,7 @@ function IntelSandbox() {
             className={`font-courier font-bold leading-none mb-3 ${
               result.verdict === "ALLOW" ? "text-allow" :
               result.verdict === "BLOCK" ? "text-block" :
-                                           "text-saffron"
+                                           "text-flag"
             }`}
             style={{ fontSize: "clamp(2.6rem, 5vw, 3.8rem)" }}
           >
@@ -323,7 +323,7 @@ function IntelSandbox() {
                 <svg viewBox="0 0 12 12" fill="none" className="w-3.5 h-3.5">
                   <polyline
                     points="2,6 5,9 10,3"
-                    stroke="#2D7A3E"
+                    stroke="#0D7A5F"
                     strokeWidth="1.8"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -443,7 +443,7 @@ function IntelSandbox() {
               onChange={upd("merchantCat")}
             >
               {MERCHANT_CATS.map((c) => (
-                <option key={c} value={c} className="bg-[#1C1610]">
+                <option key={c} value={c} className="bg-[#0F1E2E]">
                   {c}
                 </option>
               ))}
@@ -458,7 +458,7 @@ function IntelSandbox() {
               onChange={upd("timeOfDay")}
             >
               {["06:00-09:00","09:00-18:00","18:00-22:00","22:00-02:00","02:00-05:00"].map((t) => (
-                <option key={t} value={t} className="bg-[#1C1610]">
+                <option key={t} value={t} className="bg-[#0F1E2E]">
                   {t}
                 </option>
               ))}
@@ -519,12 +519,12 @@ function IntelSandbox() {
         <motion.button
           onClick={handleTest}
           disabled={isRunning}
-          whileHover={!isRunning ? { scale: 1.015, backgroundColor: "#c24409" } : {}}
+          whileHover={!isRunning ? { scale: 1.015, backgroundColor: "#1d4ed8" } : {}}
           whileTap={!isRunning ? { scale: 0.97 } : {}}
           className={`inline-flex items-center gap-3 font-barlow font-semibold text-[0.76rem] tracking-[0.14em] uppercase px-7 py-3.5 transition-all duration-200 ${
             isRunning
               ? "bg-cream/10 text-cream/22 cursor-not-allowed"
-              : "bg-saffron text-cream cursor-pointer shadow-[0_3px_20px_rgba(212,80,10,0.25)]"
+              : "bg-saffron text-cream cursor-pointer shadow-[0_3px_20px_rgba(37,99,235,0.25)]"
           }`}
         >
           {isRunning ? (
@@ -611,7 +611,7 @@ function TransactionFeed() {
           <div className="hidden sm:flex items-center gap-3 mr-2">
             {[
               { label: "ALLOW", val: stats.allow, cls: "text-allow" },
-              { label: "FLAG",  val: stats.flag,  cls: "text-saffron" },
+              { label: "FLAG",  val: stats.flag,  cls: "text-flag"    },
               { label: "BLOCK", val: stats.block, cls: "text-block"  },
             ].map((s) => (
               <div key={s.label} className="flex items-center gap-1">
@@ -654,7 +654,7 @@ function TransactionFeed() {
           {rows.map((row, i) => (
             <motion.div
               key={row.id}
-              initial={{ opacity: 0, y: -10, backgroundColor: "rgba(212,80,10,0.12)" }}
+              initial={{ opacity: 0, y: -10, backgroundColor: "rgba(37,99,235,0.12)" }}
               animate={{ opacity: 1, y: 0,  backgroundColor: "rgba(255,255,255,0)" }}
               transition={{ duration: 0.45 }}
               className={`grid grid-cols-[58px_1fr_1fr_72px_72px_56px_64px] gap-2 px-4 py-2.5 border-b border-cream/[0.04] hover:bg-cream/[0.03] transition-colors ${
@@ -737,7 +737,17 @@ function accumulate(rows: FeedRow[]) {
 export default function LivePage() {
   return (
     // Dark ink background — overrides the cream set in layout.tsx
-    <main className="min-h-screen bg-ink text-cream">
+    <main
+      className="min-h-screen bg-ink text-cream"
+      style={{
+        backgroundImage: [
+          "radial-gradient(circle, rgba(37,99,235,0.065) 1px, transparent 1px)",
+          "radial-gradient(ellipse 90% 38% at 50% 0%, rgba(37,99,235,0.10) 0%, transparent 62%)",
+          "radial-gradient(ellipse 50% 42% at 95% 92%, rgba(13,122,95,0.055) 0%, transparent 55%)",
+        ].join(", "),
+        backgroundSize: "24px 24px, 100% 100%, 100% 100%",
+      }}
+    >
 
       {/* ── Fixed scanning line effect ─────────────────────────────────── */}
       <motion.div
@@ -855,8 +865,8 @@ export default function LivePage() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const KPI_DEFS = [
-  { label: "Blocked (session)",  key: "block" as const, color: "text-block",   border: "border-block/15"   },
-  { label: "Flagged (session)",  key: "flag"  as const, color: "text-saffron", border: "border-saffron/15" },
+  { label: "Blocked (session)",  key: "block" as const, color: "text-block", border: "border-block/15" },
+  { label: "Flagged (session)",  key: "flag"  as const, color: "text-flag",  border: "border-flag/15"  },
   { label: "Allowed (session)",  key: "allow" as const, color: "text-allow",   border: "border-allow/15"   },
   { label: "Gateway Latency",    key: "lat"   as const, color: "text-cream/70",border: "border-cream/8"    },
 ] as const;

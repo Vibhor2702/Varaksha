@@ -77,6 +77,9 @@ _DS_USA_BANKING = DATASET_DIR / "usa_banking_2023.csv"
 _DS_CUSTOMER_DF  = DATASET_DIR / "Customer_DF (1).csv"
 _DS_CUST_TXN     = DATASET_DIR / "cust_transaction_details (1).csv"
 _DS_CDR          = DATASET_DIR / "realtime_cdr_fraud_dataset.csv"
+_DS_SUPERVISED   = DATASET_DIR / "supervised_dataset.csv"
+_DS_BEHAVIOR_EXT = DATASET_DIR / "remaining_behavior_ext.csv"
+_DS_TON_IOT      = DATASET_DIR / "ton-iot.csv"
 
 # ── Feature columns ──────────────────────────────────────────────────────────
 
@@ -495,9 +498,173 @@ def _load_cdr_fraud(path: pathlib.Path) -> pd.DataFrame | None:
     return df
 
 
+def _load_supervised_behavior(path: pathlib.Path) -> pd.DataFrame | None:
+    """
+    Supervised API-behavior anomaly dataset (supervised_dataset.csv).
+    1,699 rows of per-session behavioral features extracted from API call sequences.
+
+    Column mapping:
+      classification == 'outlier'        → is_fraud = 1
+      inter_api_access_duration(sec)     → amount         (session cost proxy)
+      api_access_uniqueness              → amount_zscore  (entropy signal)
+      sequence_length(count)             → transactions_last_1h
+      vsession_duration(min)             → gps_delta_km   (temporal spread proxy)
+      num_sessions                       → transactions_last_24h
+      num_unique_apis                    → previous_failed_attempts (diversity signal)
+      ip_type                            → device_type
+    """
+    if not path.exists():
+        log.info("Supervised behavior dataset not found (%s) — skipping", path.name)
+        return None
+    log.info("Loading Supervised Behavior → %s", path.name)
+    df = pd.read_csv(path)
+
+    df[TARGET] = (df["classification"] == "outlier").astype(int)
+
+    df.rename(columns={
+        "inter_api_access_duration(sec)": "amount",
+        "api_access_uniqueness":          "amount_zscore",
+        "sequence_length(count)":         "transactions_last_1h",
+        "vsession_duration(min)":          "gps_delta_km",
+        "num_sessions":                   "transactions_last_24h",
+        "num_unique_apis":                "previous_failed_attempts",
+    }, inplace=True)
+
+    if "ip_type" in df.columns:
+        ip_map = {"internal": "WEB", "external": "ANDROID", "vpn": "IOS"}
+        df["device_type"] = (
+            df["ip_type"].str.lower().map(ip_map).fillna("WEB")
+        )
+
+    df["merchant_category"] = "ECOM"   # API-layer transactions map to e-commerce
+    df["transaction_type"]  = "DEBIT"
+    df["is_new_device"]      = df[TARGET].astype(np.float32)   # anomalous sessions treated as new device
+
+    df.drop(columns=["_id", "source", "ip_type", "classification"],
+            inplace=True, errors="ignore")
+    log.info("  Supervised Behavior: %d rows | fraud=%.2f%%",
+             len(df), 100 * df[TARGET].mean())
+    return df
+
+
+def _load_behavior_extended(path: pathlib.Path) -> pd.DataFrame | None:
+    """
+    Extended API-behavior anomaly dataset (remaining_behavior_ext.csv).
+    34,423 rows; same feature schema as supervised_dataset.csv but adds
+    `behavior` (free-text label) and `behavior_type` (normal/outlier/bot/attack).
+
+    Fraud label: behavior_type in {'outlier', 'bot', 'attack'} → is_fraud = 1
+    """
+    if not path.exists():
+        log.info("Behavior extended dataset not found (%s) — skipping", path.name)
+        return None
+    log.info("Loading Behavior Extended → %s", path.name)
+    df = pd.read_csv(path)
+
+    FRAUD_TYPES = {"outlier", "bot", "attack"}
+    df[TARGET] = df["behavior_type"].isin(FRAUD_TYPES).astype(int)
+
+    df.rename(columns={
+        "inter_api_access_duration(sec)": "amount",
+        "api_access_uniqueness":          "amount_zscore",
+        "sequence_length(count)":         "transactions_last_1h",
+        "vsession_duration(min)":          "gps_delta_km",
+        "num_sessions":                   "transactions_last_24h",
+        "num_unique_apis":                "previous_failed_attempts",
+    }, inplace=True)
+
+    if "ip_type" in df.columns:
+        ip_map = {"internal": "WEB", "external": "ANDROID", "vpn": "IOS"}
+        df["device_type"] = (
+            df["ip_type"].str.lower().map(ip_map).fillna("WEB")
+        )
+
+    df["merchant_category"] = "ECOM"
+    df["transaction_type"]  = "DEBIT"
+    df["is_new_device"]      = df[TARGET].astype(np.float32)
+
+    df.drop(columns=["_id", "source", "ip_type", "behavior", "behavior_type",
+                     "classification"],
+            inplace=True, errors="ignore")
+    log.info("  Behavior Extended: %d rows | fraud=%.2f%%",
+             len(df), 100 * df[TARGET].mean())
+    return df
+
+
+def _load_ton_iot(path: pathlib.Path) -> pd.DataFrame | None:
+    """
+    ToN-IoT network intrusion dataset (ton-iot.csv).
+    Network-layer signals: DDoS, DoS, and normal traffic. Useful as a
+    high-velocity/high-byte-count fraud proxy.
+
+    Column mapping:
+      label                    → is_fraud
+      duration                 → amount         (connection duration proxy)
+      src_bytes + dst_bytes    → amount_zscore  (total data volume, z-scored later)
+      ts (unix timestamp)      → hour_of_day
+      type (ddos/dos/normal)   → merchant_category
+      proto                    → transaction_type
+    """
+    if not path.exists():
+        log.info("ToN-IoT dataset not found (%s) — skipping", path.name)
+        return None
+    log.info("Loading ToN-IoT → %s", path.name)
+    df = pd.read_csv(path)
+
+    df.rename(columns={"label": TARGET, "duration": "amount"}, inplace=True)
+    df[TARGET] = df[TARGET].astype(int)
+
+    # Total byte volume as a transaction-magnitude proxy
+    if "src_bytes" in df.columns and "dst_bytes" in df.columns:
+        total_bytes = df["src_bytes"].astype(float) + df["dst_bytes"].astype(float)
+        mu  = total_bytes.mean()
+        sig = total_bytes.std() + 1e-9
+        df["amount_zscore"] = ((total_bytes - mu) / sig).clip(-5, 5).astype(np.float32)
+
+    # Hour of day from unix timestamp
+    if "ts" in df.columns:
+        df["hour_of_day"] = (pd.to_datetime(df["ts"], unit="s", errors="coerce")
+                               .dt.hour.fillna(12).astype(np.float32))
+
+    # Map network type to merchant category
+    _type_map = {"ddos": "GAMBLING", "dos": "ECOM", "normal": "P2P"}
+    if "type" in df.columns:
+        df["merchant_category"] = (
+            df["type"].str.lower().map(_type_map).fillna("P2P")
+        )
+
+    if "proto" in df.columns:
+        proto_map = {"tcp": "DEBIT", "udp": "CREDIT"}
+        df["transaction_type"] = (
+            df["proto"].str.lower().map(proto_map).fillna("DEBIT")
+        )
+
+    df["is_new_device"] = df[TARGET].astype(np.float32)
+    df["device_type"]   = "WEB"   # network-layer traffic — map to web client
+
+    df.drop(columns=["ts", "src_ip", "src_port", "dst_ip", "dst_port",
+                     "proto", "service", "conn_state", "missed_bytes",
+                     "src_bytes", "dst_bytes", "src_pkts", "src_ip_bytes",
+                     "dst_pkts", "dst_ip_bytes", "type",
+                     "dns_query", "dns_qclass", "dns_qtype", "dns_rcode",
+                     "dns_AA", "dns_RD", "dns_RA", "dns_rejected",
+                     "ssl_version", "ssl_cipher", "ssl_resumed",
+                     "ssl_established", "ssl_subject", "ssl_issuer",
+                     "http_trans_depth", "http_method", "http_uri",
+                     "http_version", "http_request_body_len",
+                     "http_response_body_len", "http_status_code",
+                     "http_user_agent", "http_orig_mime_types",
+                     "http_resp_mime_types", "weird_name", "weird_addl",
+                     "weird_notice"],
+            inplace=True, errors="ignore")
+    log.info("  ToN-IoT: %d rows | fraud=%.2f%%",
+             len(df), 100 * df[TARGET].mean())
+    return df
+
+
 def load_and_merge_all(datasets_dir: pathlib.Path | None = None) -> pd.DataFrame | None:
     """
-    Orchestrate loading of all 5 source datasets, unify their schemas, and
+    Orchestrate loading of all 8 source datasets, unify their schemas, and
     merge into a single feature matrix ready for preprocessing.
 
     Unified sender_id naming:
@@ -541,6 +708,21 @@ def load_and_merge_all(datasets_dir: pathlib.Path | None = None) -> pd.DataFrame
 
     # CDR Realtime Fraud Dataset
     f = _load_cdr_fraud(_DS_CDR)
+    if f is not None:
+        frames.append(f)
+
+    # Supervised API-behavior anomaly dataset
+    f = _load_supervised_behavior(_DS_SUPERVISED)
+    if f is not None:
+        frames.append(f)
+
+    # Extended behavior anomaly dataset (34K rows)
+    f = _load_behavior_extended(_DS_BEHAVIOR_EXT)
+    if f is not None:
+        frames.append(f)
+
+    # ToN-IoT network intrusion dataset
+    f = _load_ton_iot(_DS_TON_IOT)
     if f is not None:
         frames.append(f)
 

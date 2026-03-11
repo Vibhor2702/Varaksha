@@ -80,7 +80,7 @@ function consortiumColor(c: string): LineColor {
 function lineClass(c: LineColor): string {
   if (c === "allow")   return "text-allow";
   if (c === "block")   return "text-block";
-  if (c === "flag")    return "text-saffron";
+  if (c === "flag")    return "text-flag";
   if (c === "saffron") return "text-saffron/60";
   if (c === "dim")     return "text-cream/25";
   return "text-cream/58";
@@ -245,7 +245,7 @@ export function CacheVisualizer() {
       </div>
 
       {/* ── Terminal body ── */}
-      <div className="p-5 bg-[#0a0806] flex-1 min-h-[240px]">
+      <div className="p-5 bg-[#071628] flex-1 min-h-[240px]">
         {/* CLI meta header */}
         <p className="font-courier text-[0.52rem] tracking-widest text-cream/15 mb-5">
           varaksha-gateway-v2&thinsp;·&thinsp;dashmap-cache-cli&thinsp;·&thinsp;rust 1.82&thinsp;·&thinsp;sha2 crate
@@ -311,7 +311,7 @@ export function CacheVisualizer() {
             className={`w-1.5 h-1.5 rounded-full transition-colors duration-400 ${
               i === entryIdx
                 ? e.verdict === "BLOCK"  ? "bg-block"
-                : e.verdict === "FLAG"   ? "bg-saffron"
+                : e.verdict === "FLAG"   ? "bg-flag"
                 :                          "bg-allow"
                 : "bg-cream/10"
             }`}

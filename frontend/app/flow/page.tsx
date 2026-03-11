@@ -14,7 +14,13 @@ type VerdictColor = "saffron" | "allow" | "block";
 
 interface DataRow    { label: string; value: string }
 interface FeatureBar { label: string; pct: number }
-interface Callout    { label: string; text: string }
+interface Callout    {
+  label:        string;
+  text:         string;
+  accentClass?: string;   // border + bg for the box
+  labelClass?:  string;   // colour for the label text
+  waveform?:    boolean;  // show audio waveform indicator
+}
 
 interface StepDef {
   layer:     string;
@@ -68,17 +74,29 @@ const STEPS: StepDef[] = [
   },
   {
     layer:  "L2 — Rust Gateway",
-    title:  "Hash & Cache Lookup",
-    kicker: "The Rust gateway hashes the account ID, checks a shared risk cache, and returns a verdict in under 10 ms. No raw personal data is ever stored.",
+    title:  "Anonymise, Hash & Decide",
+    kicker: "Your account ID is SHA-256 hashed before anything touches the cache. What gets stored is a score and a flag — never your name, number, or balance.",
     rows: [
-      { label: "INPUT VPA",  value: "user@axisbank" },
-      { label: "ALGORITHM",  value: "SHA-256  (no raw VPA stored in cache)" },
-      { label: "DIGEST",     value: "a3f8c2d9e1b04f72 … 4e190b7a" },
-      { label: "CACHE KEY",  value: "a3f8c2d9  (first 8 bytes of digest)" },
-      { label: "CACHE HIT",  value: "YES  →  { risk: 0.23, consortium: CLEAN }" },
-      { label: "LATENCY",    value: "< 10 ms  (P99 · Criterion.rs benchmark)" },
-      { label: "ALGO IMPL",  value: "Rust · DashMap sharded hashmap" },
+      { label: "RAW INPUT",    value: "user@axisbank  (seen once — never written to disk)" },
+      { label: "SHA-256 HASH", value: "a3f8c2d9e1b04f72\u20264e190b7a  (one-way \u00b7 irreversible)" },
+      { label: "CACHE KEY",    value: "a3f8c2d9  (first 8 bytes \u00b7 cannot recover original VPA)" },
+      { label: "CACHE HIT",    value: "YES  \u2192  { risk: 0.23, consortium: CLEAN }" },
+      { label: "PII STORED",   value: "NONE \u2014 no name \u00b7 no phone \u00b7 no account number" },
+      { label: "VERDICT",      value: "ALLOW  (risk 0.23 < threshold 0.50)" },
+      { label: "LATENCY",      value: "< 10 ms  (P99 \u00b7 Criterion.rs benchmark)" },
     ],
+    callout: {
+      label: "Data anonymisation pipeline",
+      accentClass: "border-allow/25 bg-allow/[0.04]",
+      labelClass:  "text-allow/65",
+      text:
+        "user@axisbank\n" +
+        "     \u2193  SHA-256  (one-way \u2014 cannot be reversed)\n" +
+        "a3f8c2d9e1b04f72\u20264e190b7a\n" +
+        "\n" +
+        "What enters the cache:   { risk: 0.23 \u00b7 consortium: CLEAN }\n" +
+        "What never gets stored:  name \u00b7 phone \u00b7 balance \u00b7 transaction history",
+    },
     verdict: { label: "ALLOW", color: "allow" },
   },
   {
@@ -100,14 +118,15 @@ const STEPS: StepDef[] = [
   {
     layer:  "L4 — Alert Agent",
     title:  "Contextual Alert Generated",
-    kicker: "If the transaction looks suspicious, an LLM drafts a plain-language alert — translated into the user’s language by Bhashini, then read aloud by our text-to-speech engine.",
+    kicker: "If the transaction looks suspicious, an LLM drafts a plain-language alert in Hindi — then read aloud using edge-tts, Microsoft's neural text-to-speech engine.",
     rows: [
       { label: "INPUT RISK",  value: "0.23  (LOW — no alert for this transaction)" },
       { label: "ALERT SENT",  value: "NO  (score below 0.50 threshold)" },
       { label: "CHANNEL",     value: "SMS · Push Notification · Audio" },
     ],
     callout: {
-      label: "HYPOTHETICAL HIGH-RISK OUTPUT — hi-IN translation via Bhashini NMT",
+      label: "HYPOTHETICAL HIGH-RISK OUTPUT — Hindi alert · edge-tts · hi-IN voice",
+      waveform: true,
       text:
         "सावधान! ₹12,400 का संदिग्ध लेन-देन।\n" +
         "6 अलग खातों में धन भेजा जा रहा है।\n" +
@@ -185,7 +204,7 @@ function TimelinePanel({
             transition={{ duration: 1.5, repeat: Infinity, ease: "easeOut" }}
           />
           {/* Inner dot */}
-          <span className="absolute inset-[5px] rounded-full bg-saffron shadow-[0_0_6px_rgba(212,80,10,0.55)]" />
+          <span className="absolute inset-[5px] rounded-full bg-saffron shadow-[0_0_6px_rgba(37,99,235,0.55)]" />
         </motion.div>
       )}
 
@@ -298,7 +317,7 @@ function StepDetail({ step, idx }: { step: StepDef; idx: number }) {
       initial="hidden"
       animate="visible"
       exit="exit"
-      className="border border-ink/10 bg-white/48 overflow-hidden"
+      className="surface-card border border-ink/10 bg-white/48 overflow-hidden"
     >
       {/* ── Card header ── */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-ink/[0.07] bg-ink/[0.025]">
@@ -386,27 +405,28 @@ function StepDetail({ step, idx }: { step: StepDef; idx: number }) {
           </div>
         )}
 
-        {/* ── Bhashini callout (L4 only) ── */}
+        {/* ── Generic callout box (L2 anonymisation · L4 Hindi alert) ── */}
         {step.callout && (
-          <div className="mb-5 border border-block/15 bg-block/[0.03] p-4 lg:p-5">
-            <p className="font-barlow text-[0.53rem] tracking-[0.28em] uppercase text-block/45 mb-3">
+          <div className={`mb-5 border p-4 lg:p-5 ${step.callout.accentClass ?? "border-block/15 bg-block/[0.03]"}`}>
+            <p className={`font-barlow text-[0.53rem] tracking-[0.28em] uppercase mb-3 ${step.callout.labelClass ?? "text-block/45"}`}>
               {step.callout.label}
             </p>
             <p className="font-barlow text-[0.95rem] text-ink leading-[1.85] whitespace-pre-line mb-4">
               {step.callout.text}
             </p>
-            {/* Audio waveform indicator — fixed heights, no Math.random() */}
-            <div className="flex items-center gap-2">
+            {/* Audio waveform — only for the L4 TTS callout */}
+            {step.callout.waveform && <div className="flex items-center gap-2">
               <span className="font-barlow text-[0.52rem] tracking-widest uppercase text-ink/25">
                 edge-tts&thinsp;·&thinsp;hi-IN&thinsp;·&thinsp;MP3
               </span>
-              <div className="flex items-end gap-0.5">
+              {/* Fixed 16px tall container — bars scale inside, never push layout */}
+              <div className="flex items-end gap-0.5" style={{ height: 16, overflow: "hidden" }}>
                 {[5, 11, 7, 14, 9, 13, 6, 15, 8, 12, 5, 10].map((h, i) => (
                   <motion.div
                     key={i}
-                    className="w-0.5 bg-saffron/50 rounded-sm"
-                    style={{ height: h }}
-                    animate={{ height: [`${h}px`, `${Math.round(h * 0.38)}px`, `${h}px`] }}
+                    className="w-0.5 bg-saffron/50 rounded-sm self-end"
+                    style={{ height: h, transformOrigin: "bottom" }}
+                    animate={{ scaleY: [1, 0.38, 1] }}
                     transition={{
                       duration: 0.75,
                       repeat: Infinity,
@@ -416,7 +436,7 @@ function StepDetail({ step, idx }: { step: StepDef; idx: number }) {
                   />
                 ))}
               </div>
-            </div>
+            </div>}
           </div>
         )}
 
@@ -621,9 +641,9 @@ export default function FlowPage() {
             >
               <motion.button
                 onClick={handleStart}
-                whileHover={{ scale: 1.02, backgroundColor: "#1C1610" }}
+                whileHover={{ scale: 1.02, backgroundColor: "#0F1E2E" }}
                 whileTap={{ scale: 0.97 }}
-                className="inline-flex items-center gap-3 bg-saffron text-cream font-barlow font-semibold text-[0.8rem] tracking-[0.16em] uppercase px-8 py-4 transition-colors duration-200 shadow-[0_4px_28px_rgba(212,80,10,0.2)]"
+                className="inline-flex items-center gap-3 bg-saffron text-cream font-barlow font-semibold text-[0.8rem] tracking-[0.16em] uppercase px-8 py-4 transition-colors duration-200 shadow-[0_4px_28px_rgba(37,99,235,0.25)]"
               >
                 <motion.span
                   className="inline-block w-2 h-2 rounded-full bg-cream/70"

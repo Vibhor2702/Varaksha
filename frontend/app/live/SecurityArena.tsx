@@ -60,7 +60,7 @@ const ATTACKS: AttackDef[] = [
     id:        "mule",
     label:     "Sneaky Mule",
     sublabel:  "₹99,999 @ 03:14 · ML ensemble intercept",
-    accentCls: "border-saffron/40 text-saffron",
+    accentCls: "border-flag/40 text-flag",
     logs: [
       { text: "[SIMULATION] Mule transaction — off-hours high-value transfer",                             color: "info",    delay: 0    },
       { text: "[TXN     ] suraj.thakur@okicici → cash.agent.77@paytm — ₹99,999 — 03:14:07 IST",          color: "warn",    delay: 380  },
@@ -114,7 +114,7 @@ function logLineClass(c: LogColor): string {
 function timestampBadge(c: LogColor): string {
   if (c === "ok")      return "text-allow/35";
   if (c === "error")   return "text-block/45";
-  if (c === "warn")    return "text-saffron/35";
+  if (c === "warn")    return "text-flag/35";
   return "text-cream/15";
 }
 
@@ -219,7 +219,7 @@ export function SecurityArena() {
                     transition={{ duration: (ATTACKS.find(a => a.id === atk.id)?.logs.at(-1)?.delay ?? 3000) / 1000, ease: "linear" }}
                     className={`absolute bottom-0 left-0 h-[2px] ${
                       atk.id === "ddos" ? "bg-block" :
-                      atk.id === "mule" ? "bg-saffron" :
+                      atk.id === "mule" ? "bg-flag" :
                                           "bg-allow"
                     }`}
                   />
@@ -240,7 +240,7 @@ export function SecurityArena() {
       </div>
 
       {/* ── Log console ── */}
-      <div className="flex-1 bg-[#080705] overflow-y-auto" style={{ maxHeight: "320px" }}>
+      <div className="flex-1 bg-[#060f1c] overflow-y-auto" style={{ maxHeight: "320px" }}>
         {visible.length === 0 ? (
           <div className="flex items-center justify-center h-32">
             <p className="font-barlow text-[0.62rem] tracking-widest uppercase text-cream/14">
