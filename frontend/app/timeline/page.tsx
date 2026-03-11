@@ -1,502 +1,479 @@
-"use client";
+﻿"use client";
 
-import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
+import {
+  motion,
+  useScroll,
+  useTransform,
+  useInView,
+} from "framer-motion";
+import {
+  Lightbulb,
+  ShieldCheck,
+  BrainCircuit,
+  GitBranch,
+  MessageCircle,
+  BarChart2,
+  RefreshCw,
+  Globe,
+  SearchCode,
+  Zap,
+  Rocket,
+  type LucideIcon,
+} from "lucide-react";
 
-// ── Color tokens ──────────────────────────────────────────────────────────────
-const ML_C  = "#2563EB";   // blue  — ML Expert  (mirrors saffron)
-const SEC_C = "#EC4899";   // pink  — Security Expert
+// ── Palette ───────────────────────────────────────────────────────────────────
+const PINK = "#EC4899";
+const BLUE = "#2563EB";
 
-type Owner = "ml" | "sec" | "both";
+type Owner = "sec" | "ml" | "both";
 
-function cColor(o: Owner) {
-  return o === "sec" ? SEC_C : ML_C;
+const LABEL: Record<Owner, string> = {
+  sec:  "Security",
+  ml:   "ML",
+  both: "Together",
+};
+
+function ownerColor(o: Owner) {
+  return o === "sec" ? PINK : BLUE;
 }
-function cGrad(o: Owner): string | undefined {
-  return o === "both"
-    ? `linear-gradient(135deg, ${SEC_C} 0%, ${ML_C} 100%)`
-    : undefined;
-}
-function cLabel(o: Owner) {
-  return o === "sec" ? "Security Expert" : o === "ml" ? "ML Expert" : "Joint Effort";
+
+// ── Milestone data ────────────────────────────────────────────────────────────
+interface Milestone {
+  date:  string;
+  title: string;
+  quote: string;
+  body:  string;
+  tags:  string[];
+  owner: Owner;
+  Icon:  LucideIcon;
 }
 
-// ── Data ──────────────────────────────────────────────────────────────────────
-interface TEvent {
-  date:      string;
-  phase:     string;
-  title:     string;
-  body:      string;
-  tags:      string[];
-  owner:     Owner;
-  artifact?: string;
-}
-
-const EVENTS: TEvent[] = [
+const MILESTONES: Milestone[] = [
   {
-    date:     "Feb 28",
-    phase:    "Phase 0",
-    title:    "Concept & Architecture Defined",
-    body:     "Full V1 audit: PyO3 Rust-Python bridge, GATE-M kernel monitor, SLSA supply-chain verification — all passing tests, but 12-step setup killed demo legibility. Decision: branch test, rebuild as five focused layers with plain JSON interfaces. V1 preserved on main for reference.",
-    tags:     ["V1 Audit", "5-Layer Design", "Architecture Decision", "test branch"],
-    owner:    "both",
-    artifact: "docs/devlogs/DEVLOG.md",
+    date:  "Feb 28",
+    title: "The Reboot",
+    quote: "V1 passed every test. It was also impossible to demo.",
+    body:  "We audited V1 together — PyO3 bindings, a kernel monitor, six agents, twelve setup steps. All of it worked. None of it was showable in thirty seconds. We made the call: branch test, five focused layers, plain JSON between them. V1 stays on main as proof of depth. V2 is for the room.",
+    tags:  ["Architecture", "Decision Day", "V1 Audit"],
+    owner: "both",
+    Icon:  Lightbulb,
   },
   {
-    date:     "Mar 1",
-    phase:    "Phase 1",
-    title:    "Layer 1 — ML Engine First Cut",
-    body:     "train_ensemble.py scaffolded: VotingClassifier (RF + XGBoost, soft vote), 8 derived features (velocity, round-amount flag, out-degree, hour-of-day sinusoid), SMOTE applied before split. Loaders for PaySim 50K stratified sample + UPI synthetic CSV. IsolationForest contamination=0.02.",
-    tags:     ["RandomForest", "XGBoost", "SMOTE", "IsolationForest", "8 features", "PaySim"],
-    owner:    "ml",
-    artifact: "services/local_engine/train_ensemble.py",
+    date:  "Mar 1",
+    title: "A Privacy Chokepoint in Rust",
+    quote: "Raw UPI IDs are toxic data. They should not survive past the front door.",
+    body:  "Built the Actix-Web gateway as the single process that ever sees raw VPAs. SHA-256 on entry — everything downstream works with hashes. DashMap for the lock-free concurrent risk cache. Three endpoints wired, score_to_verdict() thresholds set, every TODO comment has exact implementation steps for whoever fills in the cache methods.",
+    tags:  ["Rust", "SHA-256", "DashMap", "Actix-Web 4"],
+    owner: "sec",
+    Icon:  ShieldCheck,
   },
   {
-    date:     "Mar 1",
-    phase:    "Phase 2",
-    title:    "Layer 2 — Rust Gateway Built",
-    body:     "Actix-Web 4 server on :8082. Privacy chokepoint: SHA-256 VPA hashing — raw UPI IDs seen once, never written downstream. DashMap for lock-free concurrent risk cache across Actix worker threads. Three endpoints wired: GET /health, POST /v1/tx, POST /v1/webhook/update_cache. score_to_verdict() threshold logic complete.",
-    tags:     ["Actix-Web 4", "DashMap", "SHA-256", "Rust", "<5ms P99", "VPA hash"],
-    owner:    "sec",
-    artifact: "gateway/src/main.rs · cache.rs · models.rs",
+    date:  "Mar 1",
+    title: "Teaching the Model",
+    quote: "Start with something that trains. We can sharpen it later.",
+    body:  "First cut: RandomForest and XGBoost in a soft-vote ensemble, eight engineered features — transaction velocity, round-amount flag, out-degree, hour sinusoid. SMOTE before the split, always. PaySim 50K stratified. It trained. Numbers looked reasonable. Moved on.",
+    tags:  ["RF + XGBoost", "SMOTE", "8 features", "PaySim"],
+    owner: "ml",
+    Icon:  BrainCircuit,
   },
   {
-    date:     "Mar 2",
-    phase:    "Phase 3",
-    title:    "Layer 3 — Graph Mule Detection",
-    body:     "NetworkX graph agent running fully async — never blocks /v1/tx response. Four BIS Project Hertha typologies: fan-out (+0.35), fan-in (+0.30), directed cycle (+0.50), scatter (+0.20). Max aggregation (not sum) to prevent false-flagging on high-volume legitimate merchants. HMAC-SHA256-signed webhook pushes scores to Rust cache.",
-    tags:     ["NetworkX", "Fan-out", "Fan-in", "Cycle", "HMAC-SHA256", "Async Webhook"],
-    owner:    "sec",
-    artifact: "services/graph/graph_agent.py",
+    date:  "Mar 2",
+    title: "Following the Money Graph",
+    quote: "Fan-out is the tell. Every mule ring looks the same once you see the shape.",
+    body:  "Wired the NetworkX agent completely off the payment path — heavy graph traversal must never block a /v1/tx response. Four BIS typologies detected: fan-out, fan-in, directed cycles, scatter. Switched score aggregation from sum to max after sum false-flagged legitimate high-volume merchants. HMAC-signed webhook pushes result to the Rust cache.",
+    tags:  ["NetworkX", "Fan-out", "Cycles", "Async", "HMAC-SHA256"],
+    owner: "sec",
+    Icon:  GitBranch,
   },
   {
-    date:     "Mar 2",
-    phase:    "Phase 4",
-    title:    "Layer 4 — Multilingual Alert Agent",
-    body:     "Last-mile communication for flagged transactions: deterministic Hindi narration templates (no LLM dependency, auditable output), googletrans for 22 Indian scheduled languages, edge-tts for free Microsoft neural TTS with no API key. Graceful degradation to plain-text on base Python. BLOCK verdicts cite IT Act 2000 §66C and BNSS §318.",
-    tags:     ["edge-tts", "Hindi", "googletrans", "IT Act §66C", "BNSS §318", "22 languages"],
-    owner:    "sec",
-    artifact: "services/agents/agent03_accessible_alert.py",
+    date:  "Mar 2-3",
+    title: "Alerts That Actually Reach People",
+    quote: "If the alert goes out in English, 44% of India cannot act on it.",
+    body:  "Alert agent built with zero hard dependencies — deterministic Hindi templates, no LLM, no API key required. Edge-tts for free neural TTS. Googletrans covers all 22 scheduled Indian languages. BLOCK verdicts cite IT Act 2000 and BNSS by design — the legal framing matters. Falls back gracefully to plain text on base Python.",
+    tags:  ["Hindi TTS", "22 languages", "IT Act", "edge-tts"],
+    owner: "sec",
+    Icon:  MessageCircle,
   },
   {
-    date:     "Mar 3",
-    phase:    "Phase 5",
-    title:    "Layer 5 — Streamlit Demo Dashboard",
-    body:     "Single-file live dashboard: auto-refreshing ALLOW/FLAG/BLOCK risk feed with coloured verdict badges, Plotly Scattergl force-directed transaction network, Hindi alert panel for latest flagged transaction, audit log of last 50 scored transactions. Zero real PII — all VPA strings synthetic from seeded RNG.",
-    tags:     ["Streamlit", "Plotly", "Risk Feed", "Audit Log", "Synthetic PII"],
-    owner:    "both",
-    artifact: "services/demo/app.py",
+    date:  "Mar 3",
+    title: "First Time it Felt Real",
+    quote: "Watching fake transactions scroll by with real verdict colours — that is when it clicked.",
+    body:  "Streamlit dashboard as local proof-of-life: auto-refreshing ALLOW / FLAG / BLOCK feed, Plotly Scattergl transaction network, Hindi alert panel, audit log of the last 50. One command. Zero real PII — every VPA synthetic from a seeded RNG. Rough, but alive.",
+    tags:  ["Streamlit", "Plotly", "Live Feed", "Zero PII"],
+    owner: "both",
+    Icon:  BarChart2,
   },
   {
-    date:     "Mar 5–7",
-    phase:    "Phase 6",
-    title:    "ML Pipeline Overhaul — RF-Only + 7 Datasets",
-    body:     "XGBoost dropped: RF+XGB simultaneously = ~450 MB, blowing the 512 MB free-tier budget. RF-300 alone achieves ROC-AUC 0.9869 — marginal gain from adding XGB < 0.005. Feature count expanded 8→16: added balance_drain_ratio, account_age_days, previous_failed_attempts, transfer_cashout_flag. Seven loaders merged 75,358 rows. ONNX output: varaksha_rf_model.onnx.",
-    tags:     ["RF-300", "XGB dropped", "16 features", "75K rows", "ONNX", "94.4% acc", "ROC-AUC 0.9869"],
-    owner:    "ml",
-    artifact: "varaksha_rf_model.onnx · isolation_forest.onnx · scaler.onnx",
+    date:  "Mar 5-7",
+    title: "The Big Model Refactor",
+    quote: "RF and XGBoost together hit 450 MB at inference. We only had 512. XGBoost had to go.",
+    body:  "Dropped XGBoost from the serving stack — RF-300 alone reaches ROC-AUC 0.9869, the marginal gain from the ensemble was under 0.005 on this dataset family. Expanded features from 8 to 16. Seven dataset loaders merged 75,358 real rows. Output: varaksha_rf_model.onnx. The model finally felt like it was trained on something.",
+    tags:  ["RF-300 only", "16 features", "75K rows", "ONNX", "0.9869 AUC"],
+    owner: "ml",
+    Icon:  RefreshCw,
   },
   {
-    date:     "Mar 9–10",
-    phase:    "Phase 7",
-    title:    "Next.js 15 Frontend — Three Pages",
-    body:     "Static export (output: \"export\") for Cloudflare Pages edge delivery — zero SSR, zero cold starts. Three routes: / (landing with metric cards + architecture diagram), /flow (animated 5-layer architectural walkthrough with interactive step navigation), /live (synthetic real-time transaction feed with Security Arena and Cache Visualizer panels). First deployment live.",
-    tags:     ["Next.js 15", "Cloudflare Pages", "Static Export", "framer-motion", "3 Routes"],
-    owner:    "both",
-    artifact: "frontend/ → varaksha.pages.dev",
+    date:  "Mar 9-10",
+    title: "Shipped to the Web",
+    quote: "Static export to Cloudflare Pages. Zero cold starts. No excuses for a slow demo.",
+    body:  "Next.js 15 with output export — no Node server, no spin-up time, global edge delivery. Three routes: landing metrics, animated 5-layer walkthrough, real-time transaction feed with Security Arena and Cache Visualizer. First deploy live the night before the final sprint.",
+    tags:  ["Next.js 15", "Cloudflare Pages", "framer-motion", "3 routes"],
+    owner: "both",
+    Icon:  Globe,
   },
   {
-    date:     "Mar 11",
-    phase:    "Phase 8 — Part I",
-    title:    "Dataset Audit — 3 Missing Loaders Found",
-    body:     "Review of data/datasets/ found 10 CSV files but train_ensemble.py had loaders for only 7. Three silently ignored: supervised_dataset.csv (API behavior anomaly, 1,699 rows), remaining_behavior_ext.csv (bot/attack/outlier behaviors, 34,423 rows), ton-iot.csv (IoT network intrusion, 19 rows). File timestamps on disk models confirmed they predated the Phase 6 loaders — never truly trained on full set.",
-    tags:     ["Data Audit", "supervised_dataset", "remaining_behavior_ext", "ton-iot", "stale timestamps"],
-    owner:    "ml",
-    artifact: "train_ensemble.py — 3 new loaders added",
+    date:  "Mar 11 AM",
+    title: "Three Datasets Were Sitting Right There",
+    quote: "The file timestamps do not lie. Those models were never trained on the full set.",
+    body:  "Audited data/datasets/ — 10 CSV files, but only 7 had loaders. supervised_dataset.csv (1,699 rows), remaining_behavior_ext.csv (34,423 rows), ton-iot.csv — all ignored. Timestamps on the ONNX files confirmed they predated the Phase 6 additions. Three new loaders written, wired in, merged.",
+    tags:  ["Data Audit", "34K rows found", "3 missing loaders", "stale timestamps"],
+    owner: "ml",
+    Icon:  SearchCode,
   },
   {
-    date:     "Mar 11",
-    phase:    "Phase 8 — Part II",
-    title:    "Retrain on 111,499 Rows",
-    body:     "Three loaders wired into load_and_merge_all(). SMOTE rebalancing: 51,735 legit / 51,735 fraud. Result: RF Accuracy 96.52% (+2.1pp), ROC-AUC 0.9952, Fraud Precision 0.9745, Recall 0.9419, F1 0.9579. Stale ghost artifacts removed: lightgbm.pkl, xgboost.pkl/onnx, voting_ensemble.pkl/onnx.",
-    tags:     ["111K rows", "96.52%", "ROC-AUC 0.9952", "SMOTE 50/50", "Ghost cleanup"],
-    owner:    "ml",
-    artifact: "data/models/ — 5 stale files removed",
+    date:  "Mar 11 PM",
+    title: "96.52%",
+    quote: "I ran the eval three times. The number kept coming back.",
+    body:  "Retrained on 111,499 merged rows. SMOTE to 50/50. RF Accuracy 96.52% — up 2.1 points. ROC-AUC 0.9952. Fraud F1 0.9579. Cleaned out the ghost artifacts after: lightgbm, xgboost, voting_ensemble — none of them were ever loaded at inference. Just noise.",
+    tags:  ["111K rows", "96.52%", "ROC-AUC 0.9952", "Ghost cleanup"],
+    owner: "ml",
+    Icon:  Zap,
   },
   {
-    date:     "Mar 11",
-    phase:    "Phase 9",
-    title:    "UI Polish — Textures & Colour System",
-    body:     "Dot-grid body texture (22 px pitch, ink@5% opacity) layered with denim radial glow (top-left) and teal radial glow (bottom-right). .surface-card diagonal gradient utility applied to metric and step-detail cards. New flag (#D97706 amber) Tailwind token split from saffron (blue) — FLAG verdict colour now amber across all live-page components. Dark <main> on live page receives matching inline texture.",
-    tags:     ["dot-grid", "surface-card", "flag #D97706", "saffron split", "amber FLAG", "texture"],
-    owner:    "both",
-    artifact: "globals.css · tailwind.config.ts · live/page.tsx",
-  },
-  {
-    date:     "Mar 11",
-    phase:    "Deployment",
-    title:    "Repo Transfer & Final Deploy",
-    body:     "Repository transferred from Vibhor2702/Varaksha to Varaksha-G/Varaksha org. Remote updated locally, all commits pushed. Cloudflare Pages project recreated under new identity. Metric card updated: 96.52% · 111K rows · 7 real datasets. README and DEVLOG updated for Phases 8–9. Timeline page shipped.",
-    tags:     ["Varaksha-G/Varaksha", "Cloudflare Pages", "Docs Updated", "Final Deploy"],
-    owner:    "both",
-    artifact: "varaksha.pages.dev",
+    date:  "Mar 11",
+    title: "Polish, Transfer, Ship",
+    quote: "The gap between done and shipped is the finishing touches. They always matter.",
+    body:  "Dot-grid body texture, surface-card gradient utility, nav shadow. Amber (#D97706) split from the blue accent for FLAG verdicts — the colour finally reads as a warning. Repo transferred to the Varaksha-G org. Cloudflare project recreated. Docs updated. Timeline page added. That was it.",
+    tags:  ["Texture", "Amber FLAG", "Varaksha-G org", "Cloudflare"],
+    owner: "both",
+    Icon:  Rocket,
   },
 ];
 
-// ── Spine node ────────────────────────────────────────────────────────────────
-function SpineNode({ owner }: { owner: Owner }) {
-  const color = owner === "sec" ? SEC_C : ML_C;
-  const grad  = owner === "both";
-
+// ── Chip (owner label) ────────────────────────────────────────────────────────
+function Chip({ owner }: { owner: Owner }) {
+  if (owner === "both") {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: PINK }} />
+        <span
+          className="font-barlow text-[0.5rem] tracking-[0.22em] uppercase"
+          style={{
+            backgroundImage: `linear-gradient(90deg, ${PINK}, ${BLUE})`,
+            WebkitBackgroundClip: "text",
+            color: "transparent",
+          }}
+        >
+          Together
+        </span>
+        <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: BLUE }} />
+      </div>
+    );
+  }
+  const color = ownerColor(owner);
   return (
-    <div className="relative w-5 h-5 flex items-center justify-center shrink-0">
+    <div className="flex items-center gap-1.5">
+      <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+      <span className="font-barlow text-[0.5rem] tracking-[0.22em] uppercase" style={{ color }}>
+        {LABEL[owner]}
+      </span>
+    </div>
+  );
+}
+
+// ── Spine node ────────────────────────────────────────────────────────────────
+function SpineNode({ ms }: { ms: Milestone }) {
+  const color = ms.owner === "both" ? PINK : ownerColor(ms.owner);
+  return (
+    <div className="relative flex items-center justify-center w-10 h-10 shrink-0">
       <motion.span
         className="absolute inset-0 rounded-full"
-        style={{ border: `1.5px solid ${grad ? SEC_C : color}` }}
-        animate={{ scale: [1, 1.85, 1], opacity: [0.45, 0, 0.45] }}
-        transition={{ duration: 2.8, repeat: Infinity, ease: "easeOut" }}
+        style={{ border: `1px solid ${color}`, opacity: 0.3 }}
+        animate={{ scale: [1, 1.75, 1], opacity: [0.3, 0, 0.3] }}
+        transition={{ duration: 3, repeat: Infinity, ease: "easeOut" }}
       />
       <div
-        className="w-3 h-3 rounded-full shadow-sm"
-        style={
-          grad
-            ? { background: `linear-gradient(135deg, ${SEC_C}, ${ML_C})` }
-            : { backgroundColor: color }
-        }
-      />
+        className="relative z-10 w-8 h-8 rounded-full flex items-center justify-center"
+        style={{ backgroundColor: `${color}12`, border: `1px solid ${color}30` }}
+      >
+        <ms.Icon size={14} style={{ color }} />
+      </div>
     </div>
   );
 }
 
-// ── Connector arm (spine ↔ card) ─────────────────────────────────────────────
-function Arm({ owner, side }: { owner: Owner; side: "left" | "right" }) {
-  const color = owner === "sec" ? SEC_C : ML_C;
-  const grad  = owner === "both";
-  return (
-    <div
-      className="hidden lg:block h-px w-10 shrink-0"
-      style={
-        grad
-          ? { backgroundImage: `linear-gradient(${side === "right" ? "to right" : "to left"}, ${SEC_C}, ${ML_C})` }
-          : { backgroundColor: color, opacity: 0.35 }
-      }
-    />
-  );
-}
-
-// ── Event card ────────────────────────────────────────────────────────────────
-function EventCard({ ev, side }: { ev: TEvent; side: "left" | "right" | "center" }) {
+// ── Milestone card ────────────────────────────────────────────────────────────
+function Card({ ms, side }: { ms: Milestone; side: "left" | "right" | "center" }) {
   const ref    = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-80px 0px 0px 0px" });
-
-  const color = ev.owner === "sec" ? SEC_C : ML_C;
-  const grad  = cGrad(ev.owner);
-
-  const dx = side === "left" ? -24 : side === "right" ? 24 : 0;
-
-  const cardInner = (
-    <div className="bg-white/62 p-4 lg:p-5">
-      {/* Owner + date row */}
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <span
-          className="font-barlow text-[0.5rem] tracking-[0.28em] uppercase font-semibold"
-          style={
-            grad
-              ? { backgroundImage: grad, WebkitBackgroundClip: "text", color: "transparent" }
-              : { color }
-          }
-        >
-          {cLabel(ev.owner)}
-        </span>
-        <span className="font-courier text-[0.52rem] text-ink/25 tracking-wider whitespace-nowrap">
-          {ev.date}
-        </span>
-      </div>
-
-      {/* Phase kicker */}
-      <p className="font-barlow text-[0.47rem] tracking-[0.24em] uppercase text-ink/28 mb-0.5">
-        {ev.phase}
-      </p>
-
-      {/* Title */}
-      <h3 className="font-playfair font-bold text-ink text-[1rem] lg:text-[1.08rem] leading-tight mb-2">
-        {ev.title}
-      </h3>
-
-      {/* Body */}
-      <p className="font-barlow text-[0.72rem] text-ink/48 leading-relaxed mb-3">
-        {ev.body}
-      </p>
-
-      {/* Tags */}
-      <div className="flex flex-wrap gap-1 mb-3">
-        {ev.tags.map((t, i) => (
-          <span
-            key={i}
-            className="font-courier text-[0.47rem] tracking-wider uppercase px-1.5 py-0.5"
-            style={{
-              color:           grad ? "#6b7280" : color,
-              backgroundColor: grad ? "rgba(0,0,0,0.03)" : `${color}0d`,
-              border:          `1px solid ${grad ? "rgba(0,0,0,0.09)" : color + "2e"}`,
-            }}
-          >
-            {t}
-          </span>
-        ))}
-      </div>
-
-      {/* Artifact */}
-      {ev.artifact && (
-        <p className="font-courier text-[0.5rem] text-ink/22 tracking-wider border-t border-ink/[0.06] pt-2">
-          ↳ {ev.artifact}
-        </p>
-      )}
-    </div>
-  );
+  const color  = ms.owner === "sec" ? PINK : BLUE;
+  const isBoth = ms.owner === "both";
+  const initX  = side === "left" ? -28 : side === "right" ? 28 : 0;
 
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, x: dx, y: 10 }}
+      initial={{ opacity: 0, x: initX, y: 10 }}
       animate={inView ? { opacity: 1, x: 0, y: 0 } : {}}
-      transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
-      className="overflow-hidden"
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="group"
     >
-      {grad ? (
-        /* Gradient border wrapper for joint events */
-        <div
-          className="p-[1.5px]"
-          style={{ backgroundImage: grad }}
-        >
-          {cardInner}
+      <div
+        className="h-[2px] mb-0 rounded-full"
+        style={
+          isBoth
+            ? { backgroundImage: `linear-gradient(90deg, ${PINK}, ${BLUE})` }
+            : { backgroundColor: color, opacity: 0.65 }
+        }
+      />
+      <div className="bg-white/55 backdrop-blur-sm px-5 py-5 lg:px-6 lg:py-6 transition-shadow duration-300 group-hover:shadow-[0_4px_24px_rgba(15,30,46,0.07)]">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <Chip owner={ms.owner} />
+          <span className="font-courier text-[0.48rem] tracking-[0.18em] text-ink/25 whitespace-nowrap pt-px">
+            {ms.date}
+          </span>
         </div>
-      ) : (
-        <div
-          className="border"
-          style={{ borderColor: `${color}28` }}
+        <h3
+          className="font-playfair font-bold text-ink leading-tight mb-3"
+          style={{ fontSize: "clamp(1.05rem, 2vw, 1.25rem)" }}
         >
-          {/* Coloured top bar */}
-          <div className="h-[3px]" style={{ backgroundColor: color }} />
-          {cardInner}
+          {ms.title}
+        </h3>
+        <p
+          className="font-playfair italic leading-snug mb-3"
+          style={{ fontSize: "0.8rem", color: isBoth ? PINK : color, opacity: 0.85 }}
+        >
+          &ldquo;{ms.quote}&rdquo;
+        </p>
+        <p className="font-barlow text-[0.71rem] text-ink/48 leading-relaxed mb-4">
+          {ms.body}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {ms.tags.map((t, i) => (
+            <span
+              key={i}
+              className="font-courier text-[0.45rem] tracking-widest uppercase px-2 py-0.5 rounded-full"
+              style={{
+                color:           isBoth ? "#6b7280" : color,
+                backgroundColor: isBoth ? "rgba(0,0,0,0.03)" : `${color}0c`,
+                border:          `1px solid ${isBoth ? "rgba(0,0,0,0.07)" : `${color}1f`}`,
+              }}
+            >
+              {t}
+            </span>
+          ))}
         </div>
-      )}
+      </div>
     </motion.div>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Thin connector (spine node to card) ──────────────────────────────────────
+function Connector({ ms }: { ms: Milestone }) {
+  const color = ms.owner === "sec" ? PINK : BLUE;
+  return (
+    <div
+      className="hidden lg:block self-center h-px shrink-0 w-8"
+      style={{ backgroundColor: color, opacity: 0.18 }}
+    />
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function TimelinePage() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target:  containerRef,
+    offset:  ["start 15%", "end 85%"],
+  });
+  const lineScaleY = useTransform(scrollYProgress, [0, 1], [0, 1]);
+
   return (
     <main className="min-h-screen bg-cream text-ink pb-32">
 
-      {/* ── Sub-header ─────────────────────────────────────────────────── */}
+      {/* breadcrumb */}
       <header className="border-b border-ink/10 px-6 lg:px-12 py-2.5">
         <div className="max-w-7xl mx-auto flex items-center gap-3">
           <a
             href="/"
-            className="font-barlow text-[0.6rem] tracking-[0.24em] uppercase text-ink/32 hover:text-saffron transition-colors"
+            className="font-barlow text-[0.58rem] tracking-[0.24em] uppercase text-ink/30 hover:text-saffron transition-colors"
           >
             &larr;&thinsp;Varaksha
           </a>
           <span className="text-ink/15 select-none">|</span>
-          <span className="font-barlow text-[0.6rem] tracking-[0.24em] uppercase text-ink/32">
+          <span className="font-barlow text-[0.58rem] tracking-[0.24em] uppercase text-ink/30">
             Build Timeline
           </span>
         </div>
       </header>
 
-      {/* ── Hero ───────────────────────────────────────────────────────── */}
-      <section className="px-6 lg:px-12 pt-14 pb-10 max-w-7xl mx-auto">
+      {/* Hero */}
+      <section className="px-6 lg:px-12 pt-14 pb-12 max-w-5xl mx-auto">
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="font-barlow text-[0.68rem] tracking-[0.36em] uppercase mb-4"
-          style={{ backgroundImage: `linear-gradient(90deg, ${SEC_C}, ${ML_C})`, WebkitBackgroundClip: "text", color: "transparent", display: "inline-block" }}
+          transition={{ duration: 0.5 }}
+          className="font-barlow text-[0.65rem] tracking-[0.36em] uppercase mb-5"
+          style={{
+            backgroundImage: `linear-gradient(90deg, ${PINK}, ${BLUE})`,
+            WebkitBackgroundClip: "text",
+            color: "transparent",
+            display: "inline-block",
+          }}
         >
-          Feb 28 &ndash; Mar 11, 2026
+          Feb 28 &ndash; Mar 11, 2026 &middot; 11 days
         </motion.p>
 
         <motion.h1
-          initial={{ opacity: 0, y: 18 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.07, duration: 0.5, ease: "easeOut" }}
-          className="font-playfair font-bold text-ink leading-[0.92] mb-4"
+          transition={{ delay: 0.08, duration: 0.6, ease: "easeOut" }}
+          className="font-playfair font-bold text-ink leading-[0.9] mb-5"
           style={{ fontSize: "clamp(2.4rem, 5.5vw, 4.2rem)" }}
         >
-          How We Built Varaksha
-          <br className="hidden md:block" />
-          in 11 Days
+          How We Built<br />Varaksha in a Sprint
         </motion.h1>
 
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.18, duration: 0.5 }}
-          className="font-barlow text-[0.8rem] text-ink/45 max-w-xl leading-relaxed mb-8"
+          transition={{ delay: 0.2 }}
+          className="font-barlow text-[0.78rem] text-ink/42 leading-relaxed max-w-md mb-9"
         >
-          A two-person sprint reconstructed phase by phase. Security architecture in pink,
-          machine learning in blue, joint efforts in gradient.
+          A sprint diary from two people working on different halves of the same problem.
+          Security architecture in pink. Machine learning in blue.
+          Shared decisions in gradient.
         </motion.p>
 
         {/* Legend */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.26 }}
+          transition={{ delay: 0.3 }}
           className="flex flex-wrap items-center gap-6"
         >
-          {(["sec", "ml", "both"] as Owner[]).map((o) => {
-            const color = o === "sec" ? SEC_C : ML_C;
-            const grad  = cGrad(o);
-            return (
-              <div key={o} className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full shrink-0"
-                  style={grad ? { backgroundImage: grad } : { backgroundColor: color }}
-                />
-                <span className="font-barlow text-[0.62rem] tracking-[0.2em] uppercase text-ink/55">
-                  {cLabel(o)}
-                </span>
-              </div>
-            );
-          })}
+          {[
+            { label: "Security Expert", color: PINK },
+            { label: "ML Expert",       color: BLUE },
+          ].map(({ label, color }) => (
+            <div key={label} className="flex items-center gap-2.5">
+              <div className="w-7 h-[2px] rounded-full" style={{ backgroundColor: color }} />
+              <span className="font-barlow text-[0.6rem] tracking-[0.2em] uppercase text-ink/42">
+                {label}
+              </span>
+            </div>
+          ))}
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-7 h-[2px] rounded-full"
+              style={{ backgroundImage: `linear-gradient(90deg, ${PINK}, ${BLUE})` }}
+            />
+            <span className="font-barlow text-[0.6rem] tracking-[0.2em] uppercase text-ink/42">
+              Together
+            </span>
+          </div>
         </motion.div>
       </section>
 
-      {/* ── Timeline ───────────────────────────────────────────────────── */}
-      <section className="px-4 lg:px-12 max-w-5xl mx-auto">
-        <div className="relative">
+      {/* Timeline */}
+      <section ref={containerRef} className="px-4 lg:px-12 max-w-5xl mx-auto relative">
 
-          {/* Background spine — desktop only */}
-          <div
-            className="absolute top-2 bottom-2 w-px bg-ink/10 hidden lg:block"
-            style={{ left: "50%" }}
+        {/* Animated spine — desktop */}
+        <div
+          className="absolute top-0 bottom-0 hidden lg:block overflow-hidden"
+          style={{ left: "50%", width: 1, transform: "translateX(-0.5px)" }}
+        >
+          <div className="absolute inset-0 bg-ink/8" />
+          <motion.div
+            className="absolute inset-x-0 top-0 origin-top"
+            style={{
+              scaleY: lineScaleY,
+              backgroundImage: `linear-gradient(to bottom, ${PINK}, #9333ea 45%, ${BLUE})`,
+              height: "100%",
+            }}
           />
+        </div>
 
-          {/* ── Mobile: single column with left spine ── */}
-          <div className="lg:hidden space-y-6">
-            {EVENTS.map((ev, i) => (
-              <div key={i} className="relative pl-8">
-                {/* Mobile left-spine segment */}
-                <div
-                  className="absolute left-0 top-0 bottom-0 w-px"
-                  style={{
-                    backgroundImage: cGrad(ev.owner) ?? `linear-gradient(to bottom, ${
-                      i > 0 ? cColor(EVENTS[i - 1].owner) : "transparent"
-                    }, ${cColor(ev.owner)})`,
-                    opacity: 0.4,
-                  }}
-                />
-                {/* Mobile spine node */}
-                <div className="absolute left-[-8px] top-5">
-                  <SpineNode owner={ev.owner} />
-                </div>
-                <EventCard ev={ev} side="center" />
-              </div>
-            ))}
-          </div>
+        {/* Left spine — mobile */}
+        <div
+          className="absolute top-0 bottom-0 lg:hidden"
+          style={{ left: 18, width: 1, backgroundColor: "rgba(15,30,46,0.08)" }}
+        />
 
-          {/* ── Desktop: two-column alternating ── */}
-          <div className="hidden lg:block">
-            {EVENTS.map((ev, i) => {
-              const isBoth = ev.owner === "both";
+        <div className="space-y-0">
+          {MILESTONES.map((ms, i) => {
+            const isBoth = ms.owner === "both";
+            const isSec  = ms.owner === "sec";
+            return (
+              <div key={i} className="relative">
 
-              return (
-                <motion.div
-                  key={i}
-                  className="relative mb-10"
-                  initial={{ opacity: 0 }}
-                  whileInView={{ opacity: 1 }}
-                  viewport={{ once: true, margin: "-60px" }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {/* Colored spine segment — from prev event node down to this node */}
-                  {i > 0 && (
-                    <div
-                      className="absolute w-px"
-                      style={{
-                        left: "50%",
-                        top: -40,
-                        height: 40,
-                        backgroundImage: cGrad(ev.owner) ?? `linear-gradient(to bottom, ${cColor(EVENTS[i - 1].owner)}40, ${cColor(ev.owner)}40)`,
-                      }}
-                    />
-                  )}
-
-                  {/* Spine node — centered */}
-                  <div
-                    className="absolute z-10 flex items-center justify-center"
-                    style={{ left: "calc(50% - 10px)", top: isBoth ? 20 : 20 }}
-                  >
-                    <SpineNode owner={ev.owner} />
+                {/* Mobile layout */}
+                <div className="lg:hidden flex items-start gap-4 pl-10 pb-10">
+                  <div className="absolute left-[3px] top-0">
+                    <SpineNode ms={ms} />
                   </div>
+                  <Card ms={ms} side="center" />
+                </div>
 
-                  {isBoth ? (
-                    /* ── Joint event: centered card ── */
-                    <div className="flex items-start justify-center pt-2">
-                      <div className="w-[min(480px,42%)]">
-                        <EventCard ev={ev} side="center" />
-                      </div>
+                {/* Desktop alternating */}
+                {isBoth ? (
+                  <div className="hidden lg:flex items-center justify-center py-8">
+                    <div className="w-[min(460px,46%)] flex flex-col items-center gap-2">
+                      <SpineNode ms={ms} />
+                      <Card ms={ms} side="center" />
                     </div>
-                  ) : ev.owner === "sec" ? (
-                    /* ── Security event: left side ── */
-                    <div className="flex items-start pt-2">
-                      <div className="flex-1 flex justify-end">
-                        <div className="w-[92%]">
-                          <EventCard ev={ev} side="left" />
-                        </div>
-                      </div>
-                      <Arm owner={ev.owner} side="left" />
-                      {/* Node placeholder */}
-                      <div className="w-5 shrink-0" />
-                      <Arm owner={ev.owner} side="right" />
-                      <div className="flex-1" />
+                  </div>
+                ) : isSec ? (
+                  <div className="hidden lg:flex items-center py-8">
+                    <div className="flex-1 flex justify-end pr-1">
+                      <div className="w-[92%]"><Card ms={ms} side="left" /></div>
                     </div>
-                  ) : (
-                    /* ── ML event: right side ── */
-                    <div className="flex items-start pt-2">
-                      <div className="flex-1" />
-                      <Arm owner={ev.owner} side="left" />
-                      {/* Node placeholder */}
-                      <div className="w-5 shrink-0" />
-                      <Arm owner={ev.owner} side="right" />
-                      <div className="flex-1 flex justify-start">
-                        <div className="w-[92%]">
-                          <EventCard ev={ev} side="right" />
-                        </div>
-                      </div>
+                    <Connector ms={ms} />
+                    <SpineNode ms={ms} />
+                    <Connector ms={ms} />
+                    <div className="flex-1" />
+                  </div>
+                ) : (
+                  <div className="hidden lg:flex items-center py-8">
+                    <div className="flex-1" />
+                    <Connector ms={ms} />
+                    <SpineNode ms={ms} />
+                    <Connector ms={ms} />
+                    <div className="flex-1 flex justify-start pl-1">
+                      <div className="w-[92%]"><Card ms={ms} side="right" /></div>
                     </div>
-                  )}
-                </motion.div>
-              );
-            })}
-          </div>
-
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      {/* ── Footer stamp ─────────────────────────────────────────────── */}
-      <div className="mt-20 flex flex-col items-center gap-3 px-6">
+      {/* Footer */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.55 }}
+        className="mt-16 flex flex-col items-center gap-4 px-6"
+      >
         <div
-          className="w-px h-12"
-          style={{ backgroundImage: `linear-gradient(to bottom, ${SEC_C}, ${ML_C})` }}
+          className="w-px h-16"
+          style={{ backgroundImage: `linear-gradient(to bottom, ${BLUE}, ${PINK})` }}
         />
-        <div
-          className="px-5 py-2 font-courier text-[0.6rem] tracking-[0.3em] uppercase"
+        <p
+          className="font-playfair italic text-[0.9rem] text-center"
           style={{
-            border: "1px solid",
-            borderImageSlice: 1,
-            borderImageSource: `linear-gradient(135deg, ${SEC_C}, ${ML_C})`,
-            backgroundImage: `linear-gradient(135deg, ${SEC_C}08, ${ML_C}08)`,
-            color: "transparent",
-            backgroundClip: "text",
+            backgroundImage: `linear-gradient(90deg, ${PINK}, ${BLUE})`,
             WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
+            color: "transparent",
           }}
         >
-          Varaksha · 11 days · 2 people · shipped
-        </div>
-      </div>
+          11 days &middot; 2 people &middot; shipped.
+        </p>
+      </motion.div>
 
     </main>
   );
