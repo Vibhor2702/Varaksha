@@ -33,9 +33,9 @@ const fadeIn: Variants = {
 
 const metrics = [
   {
-    kicker: "Threat Magnitude",
+    kicker: "The Problem",
     value: "₹1,750Cr",
-    label: "Lost to UPI Fraud",
+    label: "Lost to UPI fraud last year",
     sub: "FY 2024",
     source: "RBI Annual Report 2024",
     accent: "bg-block",          // red top-bar
@@ -44,10 +44,10 @@ const metrics = [
     colSpan: "col-span-12 md:col-span-4",
   },
   {
-    kicker: "Transaction Scale",
+    kicker: "The Scale",
     value: "640M",
-    label: "Daily UPI Transactions",
-    sub: "Peak Active Volume",
+    label: "UPI transactions every single day",
+    sub: "Real payments, real people",
     source: "NPCI",
     accent: "bg-saffron",
     valueColor: "text-saffron",
@@ -64,10 +64,10 @@ const metrics = [
     colSpan: "col-span-12 md:col-span-4",
   },
   {
-    kicker: "Gateway Performance",
+    kicker: "Our Speed",
     value: "<10ms",
-    label: "Rust DashMap Cache Latency",
-    sub: "P99 Response Time",
+    label: "To deliver a fraud verdict",
+    sub: "Faster than a human blink",
     source: "Varaksha Gateway · Criterion.rs",
     accent: "bg-saffron",
     valueColor: "text-saffron",
@@ -75,10 +75,10 @@ const metrics = [
     colSpan: "col-span-12 md:col-span-6",
   },
   {
-    kicker: "Accessibility Imperative",
+    kicker: "Who We Protect",
     value: "44%",
-    label: "Indians Lack English Proficiency",
-    sub: "Language Barrier",
+    label: "Indians can’t read an English fraud alert",
+    sub: "Varaksha alerts in your language",
     source: "India BRICS Language Survey",
     accent: "bg-ink",
     valueColor: "text-ink",
@@ -140,7 +140,7 @@ export default function PitchPage() {
           variants={fadeUp}
           className="font-barlow text-[0.7rem] tracking-[0.34em] uppercase text-saffron mb-5"
         >
-          Privacy-Preserving Collaborative Intelligence
+          Real-time fraud protection for India&rsquo;s 640M+ daily UPI transactions
         </motion.p>
 
         {/* Display headline */}
@@ -178,7 +178,7 @@ export default function PitchPage() {
         {/* Section label */}
         <div className="flex items-center gap-3 mb-5">
           <span className="font-barlow text-[0.62rem] tracking-[0.30em] uppercase text-ink/30">
-            Intelligence Briefing
+            Why This Matters
           </span>
           <div className="flex-1 h-px bg-ink/10" />
         </div>
@@ -259,7 +259,7 @@ export default function PitchPage() {
           variants={fadeUp}
           className="font-barlow text-[0.7rem] tracking-[0.34em] uppercase text-saffron mb-4"
         >
-          Architecture Thesis
+          How We Designed This
         </motion.p>
 
         {/* Display heading */}
@@ -268,8 +268,8 @@ export default function PitchPage() {
           className="font-playfair font-bold text-ink leading-[1.05] mb-12 max-w-3xl"
           style={{ fontSize: "clamp(2rem, 5vw, 4rem)" }}
         >
-          Decoupling Intelligence
-          <br className="hidden md:block" /> from the Payment Path
+          Instant payments.
+          <br className="hidden md:block" /> Intelligent fraud defence.
         </motion.h2>
 
         {/* Two-column prose */}
@@ -280,17 +280,17 @@ export default function PitchPage() {
             <div className="w-0.5 shrink-0 bg-block/50 mt-1" />
             <div>
               <p className="font-barlow text-[0.6rem] tracking-[0.30em] uppercase text-ink/32 mb-2">
-                The Constraint
+                The Challenge
               </p>
               <p className="font-barlow text-[0.92rem] text-ink/68 leading-[1.75]">
-                Every UPI payment races through a{" "}
+                Every UPI transaction settles in under{"{"} " "{"}"}
                 <strong className="font-semibold text-ink">
-                  15-second settlement window
+                  15 seconds
                 </strong>
-                . Conventional fraud scoring cannot share that critical path
-                with heavy ensemble models, cross-bank graph traversals, and
-                consortium lookups &mdash; the latency cost alone would collapse
-                transaction throughput at NPCI scale.
+                . If your fraud model sits on that critical path &mdash; between the
+                user and their bank &mdash; one slow inference call can stall payments
+                for millions of people. That&rsquo;s the tradeoff every legacy
+                system forces you to accept.
               </p>
             </div>
           </motion.div>
@@ -300,20 +300,19 @@ export default function PitchPage() {
             <div className="w-0.5 shrink-0 bg-allow/50 mt-1" />
             <div>
               <p className="font-barlow text-[0.6rem] tracking-[0.30em] uppercase text-ink/32 mb-2">
-                The Verdict
+                How We Solve It
               </p>
               <p className="font-barlow text-[0.92rem] text-ink/68 leading-[1.75]">
-                The Rust gateway issues a binary{" "}
+                Our Rust gateway reads from a shared risk cache and returns{" "}
                 <code className="font-courier text-[0.82rem] text-saffron bg-ink/[0.05] px-1 py-0.5">
                   ALLOW&thinsp;/&thinsp;FLAG&thinsp;/&thinsp;BLOCK
                 </code>{" "}
-                verdict in{" "}
-                <strong className="font-semibold text-ink">under 10&thinsp;ms</strong>{" "}
-                from consortium-built DashMap risk intelligence. The ML ensemble
-                and graph agent run{" "}
-                <em>asynchronously, entirely off the critical path</em> &mdash;
-                continuously enriching the cache, never once blocking the
-                transaction.
+                in{" "}
+                <strong className="font-semibold text-ink">under 10&thinsp;ms</strong>
+                {" "}&mdash; without ever calling the ML model in real time. The Random
+                Forest and graph agent run{" "}
+                <em>entirely in the background</em>, writing better signals into
+                the cache after every transaction.
               </p>
             </div>
           </motion.div>
@@ -327,7 +326,7 @@ export default function PitchPage() {
           {/* Callout header bar */}
           <div className="border-b border-cream/[0.08] px-8 py-3.5 flex justify-between items-center">
             <span className="font-barlow text-[0.6rem] tracking-[0.32em] uppercase text-cream/32">
-              Five-Layer Stack &mdash; Varaksha V2
+              Five Layers &mdash; One Verdict in Under 10ms
             </span>
             <span className="font-courier text-[0.58rem] tracking-wider text-cream/18">
               async &middot; off-path &middot; consortium

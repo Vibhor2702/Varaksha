@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const STEP_H  = 108;   // px height per step slot in the left timeline track
-const DWELL   = 2400;  // ms each step remains "active" before auto-advancing
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,7 +34,7 @@ const STEPS: StepDef[] = [
   {
     layer:  "UPI Client",
     title:  "Payment Initiated",
-    kicker: "User dispatches a cryptographically signed payment request from their device",
+    kicker: "A payment leaves the user’s phone — signed, timestamped, and handed directly to Varaksha.",
     rows: [
       { label: "FROM",       value: "user@axisbank" },
       { label: "TO",         value: "merchant@kirana" },
@@ -50,8 +49,7 @@ const STEPS: StepDef[] = [
   {
     layer:  "L1 — ML Engine",
     title:  "Anomaly Evaluated",
-    kicker:
-      "Random Forest · 300 estimators · SMOTE oversampling · 94.4% accuracy · ROC-AUC 0.987",
+    kicker: "Our model scores 16 transaction features across 300 decision trees — and delivers a risk score in milliseconds.",
     rows: [
       { label: "FEATURES",       value: "16  (13 numerical + 3 categorical)" },
       { label: "MODEL",          value: "Random Forest · 300 estimators (RF-only, no XGBoost)" },
@@ -71,8 +69,7 @@ const STEPS: StepDef[] = [
   {
     layer:  "L2 — Rust Gateway",
     title:  "Hash & Cache Lookup",
-    kicker:
-      "DashMap consortium cache · SHA-256 VPA hashing · zero PII stored · <10 ms P99",
+    kicker: "The Rust gateway hashes the account ID, checks a shared risk cache, and returns a verdict in under 10 ms. No raw personal data is ever stored.",
     rows: [
       { label: "INPUT VPA",  value: "user@axisbank" },
       { label: "ALGORITHM",  value: "SHA-256  (no raw VPA stored in cache)" },
@@ -87,7 +84,7 @@ const STEPS: StepDef[] = [
   {
     layer:   "L3 — Graph Agent",
     title:   "Topology Analysis",
-    kicker:  "NetworkX · runs asynchronously — entirely off the 15-second critical path",
+    kicker:  "While the payment clears, our graph engine maps money-flow patterns in the background — protecting future transactions without blocking this one.",
     isAsync: true,
     rows: [
       { label: "GRAPH NODES",   value: "142  (VPA partition · Axis Bank segment)" },
@@ -103,8 +100,7 @@ const STEPS: StepDef[] = [
   {
     layer:  "L4 — Alert Agent",
     title:  "Contextual Alert Generated",
-    kicker:
-      "LLM + Bhashini NMT + edge-tts · 44 % of Indians lack English proficiency (BRICS Survey)",
+    kicker: "If the transaction looks suspicious, an LLM drafts a plain-language alert — translated into the user’s language by Bhashini, then read aloud by our text-to-speech engine.",
     rows: [
       { label: "INPUT RISK",  value: "0.23  (LOW — no alert for this transaction)" },
       { label: "ALERT SENT",  value: "NO  (score below 0.50 threshold)" },
@@ -469,9 +465,7 @@ function VerdictBanner() {
         </motion.p>
 
         <p className="font-barlow text-[0.8rem] text-ink/45 mb-8">
-          Transaction cleared &middot;&thinsp;
-          <strong className="text-ink font-semibold">₹4,750.00</strong>
-          &thinsp;to merchant@kirana &middot; 5-layer stack traversed in full
+          ₹4,750 cleared to merchant@kirana &mdash; all five layers passed, every signal clean.
         </p>
 
         {/* Layer pass-badges */}
@@ -502,16 +496,18 @@ export default function FlowPage() {
   const [phase, setPhase]      = useState<Phase>("idle");
   const [currentStep, setStep] = useState(-1);
 
-  // ── Auto-advance through steps ──────────────────────────────────────────
-  useEffect(() => {
-    if (phase !== "running") return;
+  // ── Manual navigation ────────────────────────────────────────────────────
+  const handleNext = useCallback(() => {
     if (currentStep === STEPS.length - 1) {
-      const t = setTimeout(() => setPhase("done"), DWELL);
-      return () => clearTimeout(t);
+      setPhase("done");
+    } else {
+      setStep((s) => s + 1);
     }
-    const t = setTimeout(() => setStep((s) => s + 1), DWELL);
-    return () => clearTimeout(t);
-  }, [phase, currentStep]);
+  }, [currentStep]);
+
+  const handlePrev = useCallback(() => {
+    if (currentStep > 0) setStep((s) => s - 1);
+  }, [currentStep]);
 
   const handleStart = useCallback(() => {
     setStep(0);
@@ -588,7 +584,7 @@ export default function FlowPage() {
           animate={{ opacity: 1 }}
           className="font-barlow text-[0.68rem] tracking-[0.36em] uppercase text-saffron mb-4"
         >
-          System Architecture &middot; Live Simulation
+          System Architecture &middot; Walkthrough
         </motion.p>
 
         <motion.h1
@@ -598,9 +594,9 @@ export default function FlowPage() {
           className="font-playfair font-bold text-ink leading-[0.92] mb-4"
           style={{ fontSize: "clamp(2.4rem, 5.5vw, 4.4rem)" }}
         >
-          The Five-Layer
+          Follow a ₹4,750 Payment
           <br className="hidden md:block" />
-          Payment Defense Stack
+          Through Every Layer of Defence
         </motion.h1>
 
         <motion.p
@@ -609,8 +605,9 @@ export default function FlowPage() {
           transition={{ delay: 0.18 }}
           className="font-barlow text-[0.86rem] text-ink/45 max-w-xl mb-10 leading-relaxed"
         >
-          Trace a ₹4,750 UPI transaction through each defensive layer in real
-          time &mdash; from device dispatch to Bhashini-powered contextual alert.
+          Click through each layer at your own pace. See exactly what Varaksha
+          does with a real payment &mdash; from the moment it leaves the phone
+          to the final fraud verdict.
         </motion.p>
 
         {/* ── Start Simulation button ── */}
@@ -649,8 +646,8 @@ export default function FlowPage() {
               className="mt-10 border border-dashed border-ink/12 p-10 text-center"
             >
               <p className="font-barlow text-[0.72rem] text-ink/22 tracking-wide">
-                Click &ldquo;Start Simulation&rdquo; to trace a live ₹4,750 UPI
-                transaction through the Varaksha defense stack
+                Hit &ldquo;Start Simulation&rdquo; to begin &mdash; then step
+                through each layer using the Next and Back buttons below.
               </p>
             </motion.div>
           )}
@@ -692,6 +689,28 @@ export default function FlowPage() {
                     />
                   )}
                 </AnimatePresence>
+
+                {/* ── Step nav buttons ── */}
+                {phase === "running" && currentStep >= 0 && (
+                  <div className="flex items-center justify-between mt-5">
+                    <button
+                      onClick={handlePrev}
+                      disabled={currentStep === 0}
+                      className="inline-flex items-center gap-2 font-barlow text-[0.72rem] tracking-[0.18em] uppercase px-5 py-2.5 border border-ink/20 text-ink/50 hover:border-ink/50 hover:text-ink transition-colors disabled:opacity-25 disabled:pointer-events-none"
+                    >
+                      &larr; Back
+                    </button>
+                    <span className="font-courier text-[0.62rem] tracking-widest text-ink/30">
+                      {currentStep + 1} / {STEPS.length}
+                    </span>
+                    <button
+                      onClick={handleNext}
+                      className="inline-flex items-center gap-2 font-barlow text-[0.72rem] tracking-[0.18em] uppercase px-5 py-2.5 bg-saffron text-cream hover:bg-ink transition-colors"
+                    >
+                      {currentStep === STEPS.length - 1 ? "See Verdict" : "Next"} &rarr;
+                    </button>
+                  </div>
+                )}
 
                 <AnimatePresence>
                   {phase === "done" && <VerdictBanner />}
