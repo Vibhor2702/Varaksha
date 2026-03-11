@@ -1,7 +1,7 @@
-# Varaksha V2 — Development Log
+# Varaksha — Development Log
 
-> Written March 10, 2026. Records every architectural decision, rebuild rationale,
-> layer-by-layer implementation note, and current open items for the V2 test branch.
+> Written March 10–11, 2026. Records every architectural decision, rebuild rationale,
+> layer-by-layer implementation note, and current open items for the test branch.
 
 ---
 
@@ -17,6 +17,8 @@
   - [Phase 5 — Layer 5: Streamlit Demo Dashboard](#phase-5--layer-5-streamlit-demo-dashboard)
   - [Phase 6 — ML Pipeline Overhaul: RF-Only + 5 Datasets](#phase-6--ml-pipeline-overhaul-rf-only--5-datasets)
   - [Phase 7 — Frontend Dashboard: Next.js 15](#phase-7--frontend-dashboard-nextjs-15)
+  - [Phase 8 — Dataset Audit + Retrain on 111K Rows](#phase-8--dataset-audit--retrain-on-111k-rows)
+  - [Phase 9 — UI Polish: Textures, Colour Tokens, Live Page](#phase-9--ui-polish-textures-colour-tokens-live-page)
 - [Directory Map](#directory-map)
 - [Architecture Deep-Dive](#architecture-deep-dive)
   - [Why Five Separate Layers?](#why-five-separate-layers)
@@ -264,6 +266,8 @@ after the initial commit:
 | Fraud Recall | 0.8983 |
 | Fraud F1 | **0.899** |
 
+> ⚠ These results reflect the Phase 6 training run. See Phase 8 for the updated results after the full dataset audit.
+
 #### Changes to `infer.py`
 
 - `_xgb_sess` and `_XGB_ONNX` removed — inference now loads only `varaksha_rf_model.onnx`
@@ -509,8 +513,110 @@ then a real score after the graph agent pushes a webhook update.
 | UPI synthetic | `Untitled spreadsheet - upi_transactions.csv` | Self-generated | UPI-specific transaction patterns |
 | Customer_DF + cust_transaction_details | `customer_df.csv` + `cust_transaction_details.csv` | Kaggle credit fraud | Joined on customer ID |
 | CDR Realtime Fraud | `cdr_realtime_fraud.csv` | Kaggle telecom fraud | High-fraud-rate supplement (50% fraud) |
+| Supervised Behavior | `supervised_dataset.csv` | API behavior anomaly | Outlier-labeled API access patterns (1,699 rows) |
+| Remaining Behavior Extended | `remaining_behavior_ext.csv` | Extended behavior | Bot/attack/outlier behavior types (34,423 rows) |
+| ToN-IoT | `ton-iot.csv` | IoT network intrusion | Network intrusion label mapping |
 | JailbreakBench | `train-*.parquet`, `test-*.parquet` | HuggingFace | Prompt injection guard training |
 | Prompt injections | `prompt_injections.json` | Custom curated | PromptGuard fine-tune |
+
+---
+
+### Phase 8 — Dataset Audit + Retrain on 111K Rows
+
+**Date:** March 11, 2026  
+**Files:** `services/local_engine/train_ensemble.py`, `data/models/`
+
+#### Problem identified
+
+A review of the `data/datasets/` directory found 10 data files, but `train_ensemble.py` had loaders for only 7. Three datasets were being silently ignored:
+
+| File | Type | Rows |
+|------|------|------|
+| `supervised_dataset.csv` | API behavior anomaly (`classification` col) | 1,699 |
+| `remaining_behavior_ext.csv` | Extended behavior (`behavior_type` col) | 34,423 |
+| `ton-iot.csv` | IoT network intrusion (`label` col) | 19 |
+
+Additionally, the models on disk were stale — file timestamps showed they predated the Phase 6 loader additions, meaning they were never actually trained on the full 7-dataset merge.
+
+#### Changes to `train_ensemble.py`
+
+Three new loaders added and wired into `load_and_merge_all()`:
+
+- **`_load_supervised_behavior()`** — maps `classification=='outlier'` → fraud=1; proxies `inter_api_access_duration` as amount, `api_access_uniqueness` as amount_zscore
+- **`_load_behavior_extended()`** — maps `behavior_type` in `{outlier, bot, attack}` → fraud=1; same schema mapping
+- **`_load_ton_iot()`** — maps `label` col; `duration` → amount; `src_bytes + dst_bytes` volume → amount_zscore; unix timestamp → hour_of_day
+
+#### Retrain results (March 11, 2026)
+
+| Dataset | Rows | Fraud % |
+|---|---|---|
+| PaySim (stratified 50 K) | 50,000 | 16.4% |
+| UPI Transactions | 647 | 24.0% |
+| Customer_DF + cust_transaction_details | 168 | 36.3% |
+| CDR Realtime Fraud | 24,543 | 50.2% |
+| Supervised Behavior | 1,699 | varies |
+| Remaining Behavior Extended | 34,423 | varies |
+| ToN-IoT | 19 | varies |
+| **Merged total** | **111,499** | **42.0% (pre-SMOTE)** |
+
+SMOTE applied: 51,735 legit / 51,735 fraud after resampling.
+
+| Metric | Value |
+|---|---|
+| RF Accuracy | **96.52%** |
+| RF ROC-AUC | **0.9952** |
+| Fraud Precision | 0.9745 |
+| Fraud Recall | 0.9419 |
+| Fraud F1 | **0.9579** |
+
+#### Cleanup
+
+Stale model artifacts removed from `data/models/`:
+- `lightgbm.pkl` — never used at inference
+- `xgboost.pkl`, `xgboost.onnx` — dropped in Phase 6, not removed until now
+- `voting_ensemble.pkl`, `voting_ensemble.onnx` — superseded by RF-only pipeline
+
+Remaining model files: `varaksha_rf_model.onnx`, `isolation_forest.onnx`, `scaler.onnx`, `random_forest.pkl`, `isolation_forest.pkl`, `scaler.pkl`, `feature_meta.json`.
+
+---
+
+### Phase 9 — UI Polish: Textures, Colour Tokens, Live Page
+
+**Date:** March 11, 2026  
+**Files:** `frontend/app/globals.css`, `frontend/tailwind.config.ts`, `frontend/app/page.tsx`, `frontend/app/flow/page.tsx`, `frontend/app/live/page.tsx`, `frontend/app/live/SecurityArena.tsx`, `frontend/app/live/CacheVisualizer.tsx`, `frontend/app/layout.tsx`
+
+#### Texture system
+
+Added a subtle depth layer across all three pages:
+
+- **`body`** (globals.css): dot-grid background (22 px pitch, ink @ 5.2% opacity) + denim radial glow top-left + teal radial glow bottom-right
+- **`.surface-card`** utility: diagonal white→pale-blue gradient applied to metric cards (landing) and step-detail cards (flow)
+- **Nav**: `shadow-[0_1px_18px_rgba(15,30,46,0.07)]` for lift
+- **Dark `<main>` on live page**: inline dot-grid + radial style mirrors body texture on dark background (Tailwind `bg-*` can't override a custom body `backgroundImage` on dark surfaces)
+
+#### Colour token: `flag`
+
+The `saffron` token was originally used for both UI accent (buttons, kickers) and FLAG verdict colour. These were split:
+
+| Token | Hex | Role |
+|---|---|---|
+| `saffron` | `#2563EB` | UI accent only (buttons, kickers, loading indicators) |
+| `flag` | `#D97706` | FLAG verdict colour only (amber) |
+
+All FLAG verdict references across `page.tsx`, `SecurityArena.tsx`, and `CacheVisualizer.tsx` updated to `text-flag` / `bg-flag` / `border-flag`.
+
+#### Frontend metric card updated
+
+Landing page metric card updated to reflect Phase 8 retrain results:
+
+| Field | Before | After |
+|---|---|---|
+| Accuracy | 94.4% | **96.52%** |
+| Training data note | 75K rows · 4 real datasets | **111K rows · 7 real datasets** |
+
+#### Repository transfer
+
+GitHub repository transferred from `Vibhor2702/Varaksha` to `Varaksha-G/Varaksha`. Remote updated locally via `git remote set-url`.
 
 ---
 

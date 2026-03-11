@@ -1,4 +1,4 @@
-# Varaksha V2 — Privacy-Preserving Collaborative UPI Fraud Intelligence Network
+# Varaksha — Privacy-Preserving Collaborative UPI Fraud Intelligence Network
 
 > **Hackathon:** Secure AI Software & Systems Hackathon — Blue Team: NPCI UPI Fraud Detection
 
@@ -49,7 +49,7 @@ External UPI Client
 | Requirement | Implementation |
 |---|---|
 | Anomaly Detection | IsolationForest (`services/local_engine/train_ensemble.py`) |
-| Ensemble Methods | RandomForest (300 estimators, RF-only; XGBoost dropped for 512 MB memory budget) |
+| Ensemble Methods | RandomForest (300 estimators, RF-only; XGBoost/LightGBM dropped for 512 MB memory budget) |
 | SMOTE for imbalanced data | `imblearn.over_sampling.SMOTE` applied to training split only |
 | User-friendly Dashboard | Streamlit (`services/demo/app.py`) with Plotly graph |
 | Real-Time Monitoring | Rust DashMap cache (`gateway/`) — sub-5 ms lookups |
@@ -104,15 +104,15 @@ npm run dev
 
 ## Training Results
 
-Model trained on 75,358 real rows from 4 datasets (PaySim stratified sample + UPI Transactions + Customer transactions joined + CDR Realtime Fraud):
+Model trained on 111,499 real rows from 7 datasets (March 2026 retrain):
 
 | Metric | Value |
 |---|---|
-| RandomForest Accuracy | **94.4%** |
-| ROC-AUC | **0.9869** |
-| Fraud Precision | 0.8996 |
-| Fraud Recall | 0.8983 |
-| Fraud F1 | **0.899** |
+| RandomForest Accuracy | **96.52%** |
+| ROC-AUC | **0.9952** |
+| Fraud Precision | 0.9745 |
+| Fraud Recall | 0.9419 |
+| Fraud F1 | **0.9579** |
 
 | Dataset | Rows | Fraud % |
 |---|---|---|
@@ -120,7 +120,10 @@ Model trained on 75,358 real rows from 4 datasets (PaySim stratified sample + UP
 | UPI Transactions | 647 | 24.0% |
 | Customer_DF + cust_transaction_details | 168 | 36.3% |
 | CDR Realtime Fraud | 24,543 | 50.2% |
-| **Total** | **75,358** | **27.5%** |
+| Supervised Behavior (API anomaly) | 1,699 | varies |
+| Remaining Behavior Extended | 34,423 | varies |
+| ToN-IoT network intrusion | 19 | varies |
+| **Total** | **111,499** | **42.0% (pre-SMOTE)** |
 
 ---
 
@@ -189,5 +192,8 @@ Datasets used for training (place under `data/datasets/`):
 | UPI Transactions (`Untitled spreadsheet - upi_transactions.csv`) | Self-generated synthetic |
 | Customer_DF + cust_transaction_details | Kaggle credit-fraud datasets |
 | CDR Realtime Fraud | Kaggle telecom fraud dataset |
+| Supervised Behavior (`supervised_dataset.csv`) | API behavior anomaly dataset |
+| Remaining Behavior Extended (`remaining_behavior_ext.csv`) | Extended behavior classification dataset |
+| ToN-IoT (`ton-iot.csv`) | IoT network intrusion dataset |
 
 If no datasets are present, `train_ensemble.py` falls back to numpy synthetic generation (hackathon offline mode).
