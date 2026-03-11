@@ -33,7 +33,7 @@ const courierPrime = Courier_Prime({
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
 export const metadata: Metadata = {
-  title: "Varaksha V2 — UPI Fraud Defense Network",
+  title: "Varaksha — UPI Fraud Defense Network",
   description:
     "Privacy-preserving collaborative UPI fraud intelligence. " +
     "Rust gateway delivers ALLOW / FLAG / BLOCK verdicts in <10ms, " +
@@ -83,6 +83,12 @@ export default function RootLayout({
                 className="font-barlow text-[0.65rem] tracking-[0.22em] uppercase text-ink/50 hover:text-ink transition-colors"
               >
                 How It Works
+              </Link>
+              <Link
+                href="/timeline"
+                className="font-barlow text-[0.65rem] tracking-[0.22em] uppercase text-ink/50 hover:text-ink transition-colors"
+              >
+                Timeline
               </Link>
               <Link
                 href="/live"
