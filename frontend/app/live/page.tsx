@@ -164,6 +164,31 @@ function riskBar(score: number) {
   return                    "bg-allow";
 }
 
+/**
+ * maskVpa — privacy helper
+ *
+ * Per DPDP Act 2023 §2(t) mobile numbers are personal data; per NPCI UPI
+ * Procedural Guidelines PSPs must mask phone-number VPAs when displayed
+ * outside the VPA owner's own screen.  Name-based VPAs (e.g.
+ * "ravi.kumar@axisbank") are passed through unchanged because the handle
+ * contains no phone number.
+ *
+ * Examples:
+ *   9876543210@ybl  →  98****10@ybl
+ *   ravi.kumar@axisbank  →  ravi.kumar@axisbank  (unchanged)
+ */
+function maskVpa(vpa: string): string {
+  const atIdx = vpa.indexOf("@");
+  if (atIdx === -1) return vpa;
+  const handle = vpa.slice(0, atIdx);
+  const bank   = vpa.slice(atIdx + 1);
+  // Match 10+ consecutive digits (Indian mobile VPA format)
+  if (/^\d{10,}$/.test(handle)) {
+    return `${handle.slice(0, 2)}****${handle.slice(-2)}@${bank}`;
+  }
+  return vpa;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODULE A — INTELLIGENCE SANDBOX
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -665,10 +690,10 @@ function TransactionFeed() {
                 {row.ts}
               </span>
               <span className="font-courier text-[0.65rem] text-cream/55 truncate">
-                {row.sender}
+                {maskVpa(row.sender)}
               </span>
               <span className="font-courier text-[0.65rem] text-cream/38 truncate">
-                {row.receiver}
+                {maskVpa(row.receiver)}
               </span>
               <span className="font-courier text-[0.65rem] text-cream/55 tabular-nums">
                 ₹{row.amount.toLocaleString("en-IN")}
