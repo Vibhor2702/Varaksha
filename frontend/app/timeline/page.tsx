@@ -19,6 +19,14 @@ import {
   SearchCode,
   Zap,
   Rocket,
+  Smartphone,
+  Languages,
+  Network,
+  Scale,
+  Cpu,
+  Bot,
+  PackageOpen,
+  ShieldPlus,
   type LucideIcon,
 } from "lucide-react";
 
@@ -168,6 +176,80 @@ const STORYBOARD = [
     label: "The Outcome",
     body:  "96.52% detection accuracy. ROC-AUC 0.9952. Sub-5ms P99 gateway latency. Four BIS money-mule typologies detected autonomously. Fraud alerts in 22 Indian languages, with legal citations embedded. Built, trained, and deployed to global edge in 11 days.",
   },
+];
+
+// ── Future scope data ────────────────────────────────────────────────────
+interface FutureItem {
+  Icon:     LucideIcon;
+  title:    string;
+  blurb:    string;
+  tag:      string;
+  colorIdx: number;   // 0 = pink, 1 = blue, 2 = purple
+}
+
+const FUTURE: FutureItem[] = [
+  {
+    Icon:     Languages,
+    title:    "All 22 Scheduled Languages",
+    blurb:    "Expand from 8 to all constitutionally scheduled Indian languages via IndicTrans2 — swap a single function call in agent03.",
+    tag:      "Accessibility",
+    colorIdx: 0,
+  },
+  {
+    Icon:     Smartphone,
+    title:    "Mobile SDK Packaging",
+    blurb:    "Package the ONNX inference layer as an Android / iOS SDK so PSPs can embed sub-1ms on-device scoring without a network call.",
+    tag:      "Distribution",
+    colorIdx: 1,
+  },
+  {
+    Icon:     Cpu,
+    title:    "On-Device Edge Inference",
+    blurb:    "Ship varaksha_rf_model.onnx to handsets via ONNX Runtime Mobile. Scores computed locally — zero round-trip latency, works offline.",
+    tag:      "Performance",
+    colorIdx: 1,
+  },
+  {
+    Icon:     Network,
+    title:    "Streaming Graph Analytics",
+    blurb:    "Replace batch NetworkX with Apache Flink or Kafka Streams so fan-out and cycle detection updates continuously as edges arrive.",
+    tag:      "Architecture",
+    colorIdx: 2,
+  },
+  {
+    Icon:     Bot,
+    title:    "Live LLM Legal Summaries",
+    blurb:    "Replace the mock LLM in agent03 with GPT-4o-mini or Groq to generate dynamic, context-aware legal citations per transaction.",
+    tag:      "AI",
+    colorIdx: 0,
+  },
+  {
+    Icon:     ShieldPlus,
+    title:    "NPCI Consortium Risk Sharing",
+    blurb:    "Federate anonymised risk scores across participating PSP banks via a shared NPCI registry — consortium intelligence without PII exposure.",
+    tag:      "Ecosystem",
+    colorIdx: 2,
+  },
+  {
+    Icon:     Scale,
+    title:    "Automated Regulatory Reporting",
+    blurb:    "Auto-generate FIU-IND Suspicious Transaction Reports for PMLA §3 triggers and maintain a DPDP Act 2023 audit trail per blocked VPA.",
+    tag:      "Compliance",
+    colorIdx: 0,
+  },
+  {
+    Icon:     PackageOpen,
+    title:    "Open-Source Release",
+    blurb:    "Publish the five-layer pipeline as an open library — plug in your own dataset, retrain in one command, deploy to any cloud with azd.",
+    tag:      "Community",
+    colorIdx: 1,
+  },
+];
+
+const FUTURE_COLORS = [
+  { text: PINK,      bg: `${PINK}10`,      border: `${PINK}22`      },
+  { text: BLUE,      bg: `${BLUE}10`,      border: `${BLUE}22`      },
+  { text: "#9333ea", bg: "#9333ea10",      border: "#9333ea22"      },
 ];
 
 // ── Chip (owner label) ────────────────────────────────────────────────────────
@@ -504,13 +586,104 @@ export default function TimelinePage() {
         </div>
       </section>
 
+      {/* Future Scope */}
+      <section className="px-6 lg:px-12 max-w-5xl mx-auto mt-28">
+
+        {/* Section header */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.55 }}
+          className="mb-12 text-center"
+        >
+          <p
+            className="font-barlow text-[0.6rem] tracking-[0.38em] uppercase mb-4 inline-block"
+            style={{
+              backgroundImage: `linear-gradient(90deg, #9333ea, ${BLUE})`,
+              WebkitBackgroundClip: "text",
+              color: "transparent",
+            }}
+          >
+            On the Horizon
+          </p>
+          <h2
+            className="font-playfair font-bold text-ink leading-tight mb-4"
+            style={{ fontSize: "clamp(1.7rem, 4vw, 2.8rem)" }}
+          >
+            What We Build Next
+          </h2>
+          <p className="font-barlow text-[0.73rem] text-ink/38 max-w-md mx-auto leading-relaxed">
+            The system is shipped. These are the threads we picked up and consciously set down
+            to meet a deadline. Each one has a clear path.
+          </p>
+        </motion.div>
+
+        {/* Cards grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {FUTURE.map((item, i) => {
+            const c = FUTURE_COLORS[item.colorIdx];
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-30px" }}
+                transition={{ delay: (i % 4) * 0.07, duration: 0.5, ease: "easeOut" }}
+                className="group relative p-5 bg-white/35 backdrop-blur-sm"
+                style={{ border: `1px dashed ${c.border}` }}
+              >
+                {/* Top accent line */}
+                <div
+                  className="absolute top-0 left-0 right-0 h-[1.5px] opacity-50"
+                  style={{ backgroundColor: c.text }}
+                />
+
+                {/* Icon */}
+                <div
+                  className="w-8 h-8 flex items-center justify-center mb-4"
+                  style={{ backgroundColor: c.bg, border: `1px solid ${c.border}` }}
+                >
+                  <item.Icon size={14} style={{ color: c.text }} />
+                </div>
+
+                {/* Title */}
+                <h4
+                  className="font-playfair font-bold text-ink text-[0.88rem] leading-snug mb-2"
+                >
+                  {item.title}
+                </h4>
+
+                {/* Blurb */}
+                <p className="font-barlow text-[0.64rem] text-ink/40 leading-relaxed mb-4">
+                  {item.blurb}
+                </p>
+
+                {/* Tag */}
+                <span
+                  className="font-courier text-[0.43rem] tracking-widest uppercase px-2 py-0.5"
+                  style={{
+                    color:           c.text,
+                    backgroundColor: c.bg,
+                    border:          `1px solid ${c.border}`,
+                  }}
+                >
+                  {item.tag}
+                </span>
+              </motion.div>
+            );
+          })}
+        </div>
+
+      </section>
+
       {/* Footer */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.55 }}
-        className="mt-16 flex flex-col items-center gap-4 px-6"
+        className="mt-24 flex flex-col items-center gap-4 px-6"
       >
         <div
           className="w-px h-16"
