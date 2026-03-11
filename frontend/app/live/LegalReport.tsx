@@ -7,10 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// 8-second simulated audio clip (100ms ticks, advance by 1.25% each tick)
-const AUDIO_DURATION_MS   = 8000;
-const AUDIO_TICK_MS       = 100;
-const AUDIO_STEP_PCT      = 100 / (AUDIO_DURATION_MS / AUDIO_TICK_MS);
+// (audio constants removed — duration driven by real <audio> element)
 
 // Waveform bar heights — fixed array, no Math.random() in render
 const WAVEFORM_HEIGHTS = [4, 9, 6, 13, 8, 15, 5, 12, 7, 14, 4, 11, 6, 10, 5, 13, 8, 9, 4, 12];
@@ -137,11 +134,10 @@ CERTIFYING SYSTEM : Varaksha V2 Fraud Intelligence Network
 `.trimStart();
 }
 
-// ── Formatting helper: mm:ss ──────────────────────────────────────────────────
-function fmtTime(pct: number): string {
-  const totalSec = Math.round((pct / 100) * (AUDIO_DURATION_MS / 1000));
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
+// ── Formatting helper: mm:ss (takes seconds) ────────────────────────────────
+function fmtTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
@@ -152,72 +148,46 @@ function fmtTime(pct: number): string {
 type DlState = "idle" | "generating" | "done";
 
 export function LegalReport() {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress,  setProgress ] = useState(0);
-  const [dlState,   setDlState  ] = useState<DlState>("idle");
-  const [language,  setLanguage ] = useState<LangCode>("hi");
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const [isPlaying,     setIsPlaying    ] = useState(false);
+  const [progress,      setProgress     ] = useState(0);
+  const [dlState,       setDlState      ] = useState<DlState>("idle");
+  const [language,      setLanguage     ] = useState<LangCode>("hi");
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [currentTimeSec,setCurrentTimeSec] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const langObj = LANGUAGES.find((l) => l.code === language)!;
   const alertT  = ALERT_TEXT[language];
 
-  // ── Cancel speech + reset audio whenever language changes ─────────────────
+  // ── Reset audio whenever language changes ───────────────────────────────
   useEffect(() => {
-    if (typeof window !== "undefined") window.speechSynthesis.cancel();
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.load();
+    }
     setIsPlaying(false);
     setProgress(0);
+    setCurrentTimeSec(0);
   }, [language]);
-
-  // ── Progress bar timer (visual) ───────────────────────────────────────────
-  useEffect(() => {
-    if (!isPlaying) return;
-    const interval = setInterval(() => {
-      setProgress((p) => {
-        const next = p + AUDIO_STEP_PCT;
-        if (next >= 100) {
-          setIsPlaying(false);
-          return 100;
-        }
-        return next;
-      });
-    }, AUDIO_TICK_MS);
-    return () => clearInterval(interval);
-  }, [isPlaying]);
 
   // ── Play / pause ───────────────────────────────────────────────────────────
   const handlePlayPause = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const synth = window.speechSynthesis;
-
+    const audio = audioRef.current;
+    if (!audio) return;
     if (isPlaying) {
-      // Pause both visual bar and speech
-      synth.pause();
+      audio.pause();
       setIsPlaying(false);
     } else {
-      if (progress > 0 && progress < 100 && synth.paused) {
-        // Resume paused speech
-        synth.resume();
-        setIsPlaying(true);
-      } else {
-        // Start fresh (handles both first play and replay after finish)
+      if (progress >= 100) {
+        audio.currentTime = 0;
         setProgress(0);
-        const utt = new SpeechSynthesisUtterance(alertT.primary);
-        utt.lang = langObj.voiceLabel;  // e.g. "ta-IN", "hi-IN"
-        utt.rate = 0.92;
-        utt.onend = () => {
-          setIsPlaying(false);
-          setProgress(100);
-        };
-        utt.onerror = () => {
-          setIsPlaying(false);
-        };
-        utteranceRef.current = utt;
-        synth.cancel();    // clear any queued speech
-        synth.speak(utt);
-        setIsPlaying(true);
+        setCurrentTimeSec(0);
       }
+      audio.play().catch(() => {});
+      setIsPlaying(true);
     }
-  }, [isPlaying, progress, alertT.primary, langObj.voiceLabel]);
+  }, [isPlaying, progress]);
 
   // ── PDF / evidence-file download ─────────────────────────────────────────
   const handleDownload = useCallback(() => {
@@ -238,7 +208,7 @@ export function LegalReport() {
     }, 1600);
   }, [dlState, language]);
 
-  const durationStr = `0:${String(Math.round(AUDIO_DURATION_MS / 1000)).padStart(2, "0")}`;
+  const durationStr = audioDuration > 0 ? fmtTime(audioDuration) : "0:08";
 
   return (
     <section className="border border-cream/[0.08] overflow-hidden">
@@ -429,7 +399,7 @@ export function LegalReport() {
                 {/* Time display */}
                 <div className="text-right shrink-0">
                   <p className="font-courier text-[0.64rem] text-saffron/60 tabular-nums">
-                    {fmtTime(progress)}
+                    {fmtTime(currentTimeSec)}
                   </p>
                   <p className="font-courier text-[0.52rem] text-cream/18 tabular-nums">
                     {durationStr}
@@ -439,7 +409,7 @@ export function LegalReport() {
 
               <div className="flex items-center justify-between mt-3">
                 <p className="font-barlow text-[0.48rem] tracking-widest uppercase text-cream/16">
-                  Web Speech API &middot; edge-tts style
+                  Microsoft Neural TTS &middot; edge-tts
                 </p>
                 <AnimatePresence mode="wait">
                   <motion.p
@@ -607,6 +577,28 @@ export function LegalReport() {
 
         </div>
       </div>
+
+      {/* Hidden audio element — pre-generated Neural TTS MP3s */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <audio
+        ref={audioRef}
+        src={`/alert-${language}.mp3`}
+        preload="auto"
+        onLoadedMetadata={() => {
+          const audio = audioRef.current;
+          if (audio) setAudioDuration(audio.duration);
+        }}
+        onTimeUpdate={() => {
+          const audio = audioRef.current;
+          if (!audio || !audio.duration) return;
+          setCurrentTimeSec(audio.currentTime);
+          setProgress((audio.currentTime / audio.duration) * 100);
+        }}
+        onEnded={() => {
+          setIsPlaying(false);
+          setProgress(100);
+        }}
+      />
     </section>
   );
 }
