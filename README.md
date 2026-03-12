@@ -19,7 +19,7 @@ Develop an AI/ML solution to identify fraudulent transactions in the Unified Pay
 | # | Objective | Varaksha Implementation |
 |---|---|---|
 | 1 | Implement **anomaly detection** techniques to identify unusual transaction patterns | `IsolationForest` trained on 111 K rows — 16 behavioural features including hour-of-day sin/cos, amount log-transform, device-seen flag |
-| 2 | Explore **ensemble methods or deep learning** to improve prediction accuracy | `RandomForest` (300 trees) fused with `IsolationForest` scores → composite risk 0–1; ROC-AUC **0.9545** |
+| 2 | Explore **ensemble methods or deep learning** to improve prediction accuracy | `RandomForest` (300 trees) fused with `IsolationForest` scores → composite risk 0–1; ROC-AUC **0.9546** |
 | 3 | Address **imbalanced datasets** using techniques like SMOTE | `imblearn.SMOTE` applied to training split only; held-out test set preserves natural 42 % fraud ratio |
 | 4 | Develop a **user-friendly dashboard** for visualising transaction risks and fraud alerts | Streamlit dashboard (`services/demo/app.py`) + full interactive Next.js 15 web UI with live transaction simulator, evidence report, and 8-language audio alert |
 | 5 | Create **real-time monitoring** systems for immediate threat detection | Rust Actix-Web gateway with lock-free `DashMap` consortium cache — P99 < 5 ms verdict; async graph analysis off the hot path |
@@ -153,11 +153,11 @@ Trained on 111,499 real rows across 7 datasets (March 2026):
 
 | Metric | Value |
 |---|---|
-| RandomForest Accuracy | **96.52%** |
-| ROC-AUC | **0.9952** |
-| Fraud Precision | 0.9745 |
-| Fraud Recall | 0.9419 |
-| Fraud F1 | **0.9579** |
+| RandomForest Accuracy | **85.24%** |
+| ROC-AUC | **0.9546** |
+| Fraud Precision | 0.7709 |
+| Fraud Recall | 0.9229 |
+| Fraud F1 | **0.8401** |
 
 | Dataset | Rows | Fraud % |
 |---|---|---|

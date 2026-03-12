@@ -62,7 +62,7 @@ const MILESTONES: Milestone[] = [
     date:  "Feb 28",
     title: "Defining the Architecture",
     quote: "A system that cannot be demonstrated in under a minute cannot be evaluated under pressure.",
-    body:  "An initial audit identified a fundamental tension between technical depth and operational legibility. The architecture carried PyO3 bindings, a kernel monitor, multi-agent orchestration, and a twelve-step setup sequence — all fully functional, none presentable within a constrained demonstration window. The decision was taken to rebuild on a focused five-layer pipeline with plain JSON interfaces between components, with demonstrability treated as a first-class design constraint.",
+    body:  "Requirements scoped to a focused five-layer pipeline: Rust privacy gateway, ML classifier, graph topology analyser, multilingual alert agent, and ops dashboard. Demonstrability was treated as a first-class design constraint alongside every functional requirement.",
     tags:  ["Architecture", "5-Layer Design", "Design Decision"],
     owner: "both",
     Icon:  Lightbulb,
@@ -71,7 +71,7 @@ const MILESTONES: Milestone[] = [
     date:  "Mar 1",
     title: "Privacy Gateway in Rust",
     quote: "Sensitive identifiers must not persist beyond the perimeter. Everything downstream operates on hashes.",
-    body:  "The Actix-Web 4 gateway was designed as the sole component that handles raw Virtual Payment Addresses. SHA-256 hashing is applied at ingress — all downstream services receive only derived identifiers. DashMap provides a lock-free concurrent risk cache across the Actix worker pool. Three endpoints manage transaction scoring, health enquiries, and cache updates; score_to_verdict() threshold logic determines ALLOW, FLAG, and BLOCK classifications.",
+    body:  "The Actix-Web 4 gateway is the sole component that handles raw Virtual Payment Addresses — SHA-256 hashing is applied at ingress so all downstream services receive only derived identifiers. DashMap provides a lock-free concurrent risk cache across the Actix worker pool; score_to_verdict() threshold logic determines ALLOW, FLAG, and BLOCK classifications.",
     tags:  ["Rust", "SHA-256", "DashMap", "Actix-Web 4"],
     owner: "sec",
     Icon:  ShieldCheck,
@@ -80,7 +80,7 @@ const MILESTONES: Milestone[] = [
     date:  "Mar 1",
     title: "ML Baseline Established",
     quote: "A working baseline yields more actionable information than an unimplemented optimal architecture.",
-    body:  "The initial model comprised a RandomForest and XGBoost soft-vote ensemble operating on eight engineered features: transaction velocity, round-amount flag, network out-degree, and hour-of-day sinusoidal encoding. SMOTE rebalancing was applied prior to every train-test split. Trained on a stratified 50K PaySim sample, the baseline established an evaluation framework and an accuracy reference point for subsequent iterations.",
+    body:  "Initial RF + XGBoost soft-vote ensemble on 8 features — transaction velocity, round-amount flag, network out-degree, hour-of-day sinusoidal encoding — trained on a stratified 50K PaySim sample with SMOTE rebalancing. Established the evaluation framework and accuracy reference point for all subsequent iterations.",
     tags:  ["RF + XGBoost", "SMOTE", "8 features", "PaySim"],
     owner: "ml",
     Icon:  BrainCircuit,
@@ -89,7 +89,7 @@ const MILESTONES: Milestone[] = [
     date:  "Mar 2",
     title: "Graph-Based Mule Detection",
     quote: "Network fan-out is a consistent topological signature across all known money-mule architectures.",
-    body:  "The NetworkX graph agent operates asynchronously and entirely outside the critical payment path — graph traversal must never introduce latency into /v1/tx response times. Four BIS Project Hertha typologies are detected: fan-out, fan-in, directed cycles, and scatter patterns. Score aggregation uses the maximum across detected patterns rather than summation, preventing false positives on legitimate high-volume merchants. Results are pushed to the Rust risk cache via HMAC-SHA256-signed webhooks.",
+    body:  "A NetworkX graph agent runs asynchronously outside the payment critical path, detecting all four BIS Project Hertha mule typologies: fan-out, fan-in, directed cycles, and scatter patterns. Score aggregation uses the maximum across detected patterns to prevent false positives on legitimate high-volume merchants; results push to the Rust risk cache via HMAC-SHA256-signed webhooks.",
     tags:  ["NetworkX", "Fan-out", "Directed Cycles", "Async", "HMAC-SHA256"],
     owner: "sec",
     Icon:  GitBranch,
@@ -98,7 +98,7 @@ const MILESTONES: Milestone[] = [
     date:  "Mar 2–3",
     title: "Multilingual Alert Delivery",
     quote: "A fraud alert has no utility if the recipient cannot read the language in which it is issued.",
-    body:  "The alert agent supports 8 Indian languages — English, Hindi, Tamil, Telugu, Bengali, Marathi, Gujarati, and Kannada — each with a matched Microsoft Neural TTS voice via edge-tts. Alerts are personalised: every notification embeds the transaction ID, blocked amount, and risk score in the recipient's preferred language. BLOCK-verdict alerts explicitly cite IT Act 2000 §66D and BNS §318(4). No external NMT API is required; the template engine is swappable for IndicTrans2 or any ULCA-compliant service at production time.",
+    body:  "Alerts synthesised in 8 Indian languages via Microsoft Neural TTS (edge-tts) embed the transaction ID, blocked amount, and risk score in the recipient\u2019s preferred language. BLOCK verdicts cite IT Act 2000 \u00a766D and BNS \u00a7318(4) verbatim; the template engine is swappable for IndicTrans2 at production time.",
     tags:  ["8 languages", "Neural TTS", "IT Act 2000 §66D", "edge-tts"],
     owner: "sec",
     Icon:  MessageCircle,
@@ -107,7 +107,7 @@ const MILESTONES: Milestone[] = [
     date:  "Mar 3",
     title: "Integration Proof-of-Concept",
     quote: "A live feed of synthetic fraud, rendered with correctly classified verdicts, validated the end-to-end pipeline.",
-    body:  "The Streamlit dashboard was constructed as an integration test made visible: an auto-refreshing ALLOW/FLAG/BLOCK verdict feed with colour-coded classifications, a Plotly Scattergl force-directed transaction network, a Hindi alert panel surfacing the most recent flagged transaction, and an audit log of the last 50 scored events. All Virtual Payment Addresses are synthetically generated from a seeded RNG — no real payment data is processed at any stage.",
+    body:  "A Streamlit dashboard confirmed end-to-end verdicts — from Rust ingress to multilingual alert — with a Plotly Scattergl force-directed transaction network, Hindi alert panel, and a 50-event audit log. All VPAs are synthetically generated; no real PII is processed at any stage.",
     tags:  ["Streamlit", "Plotly Scattergl", "Synthetic PII", "Audit Log"],
     owner: "both",
     Icon:  BarChart2,
@@ -116,7 +116,7 @@ const MILESTONES: Milestone[] = [
     date:  "Mar 5–7",
     title: "Model Architecture Overhaul",
     quote: "At 450 MB combined, the ensemble consumed nearly the entire memory budget for a sub-0.005 accuracy gain.",
-    body:  "XGBoost was removed from the serving stack. RF-300 achieves ROC-AUC 0.9869 in isolation; the marginal improvement from the ensemble was below 0.005 on this dataset family — insufficient to justify the memory overhead. Feature engineering was expanded from 8 to 16 variables, incorporating balance_drain_ratio, account_age_days, previous_failed_attempts, and transfer_cashout_flag. Seven dataset loaders merged 75,358 real-world rows into a single training set. The output artefact, varaksha_rf_model.onnx, replaced the ensemble entirely.",
+    body:  "XGBoost was removed from the serving stack: RF-300 achieves ROC-AUC 0.9869 in isolation and the marginal ensemble gain was insufficient to justify 450 MB combined weight. Feature engineering expanded from 8 to 16 variables, incorporating balance_drain_ratio, account_age_days, previous_failed_attempts, and transfer_cashout_flag; the output artefact became varaksha_rf_model.onnx.",
     tags:  ["RF-300 only", "16 features", "75K rows", "ONNX", "ROC-AUC 0.9869"],
     owner: "ml",
     Icon:  RefreshCw,
@@ -125,7 +125,7 @@ const MILESTONES: Milestone[] = [
     date:  "Mar 9–10",
     title: "Production Deployment",
     quote: "Static export to a global edge network eliminates cold starts and infrastructure overhead from the demonstration path entirely.",
-    body:  "Next.js 15 was configured with static export, removing the Node.js server from the serving path and enabling zero-latency global delivery via Cloudflare Pages. The frontend comprises three routes: a landing page with live metric cards, an animated architectural walkthrough, and a synthetic real-time transaction feed incorporating a Security Arena panel and a Cache Visualizer. Initial deployment was live and stable.",
+    body:  "Next.js 15 configured with static export and deployed to Cloudflare Pages eliminates cold starts and Node.js server overhead from the demonstration path. The frontend ships three routes: a live stats landing page, an animated architecture walkthrough, and a real-time transaction feed with Security Arena and Cache Visualizer panels.",
     tags:  ["Next.js 15", "Cloudflare Pages", "Static Export", "framer-motion"],
     owner: "both",
     Icon:  Globe,
@@ -134,17 +134,17 @@ const MILESTONES: Milestone[] = [
     date:  "Mar 11 AM",
     title: "Dataset Coverage Audit",
     quote: "Model artefact timestamps confirmed the training pipeline had never ingested the complete dataset.",
-    body:  "A systematic audit of the dataset directory revealed that three files had no registered loaders in the training pipeline: supervised_dataset.csv (API behaviour anomaly patterns, 1,699 rows), remaining_behavior_ext.csv (bot, attack, and outlier behaviours, 34,423 rows), and ton-iot.csv (IoT network intrusion data). Filesystem modification timestamps on the ONNX model artefacts confirmed they predated the addition of these files. Three loaders were written, validated against schema, and integrated into the merge pipeline.",
+    body:  "Filesystem timestamp analysis revealed three dataset files with no registered loaders: supervised_dataset.csv (1,699 rows), remaining_behavior_ext.csv (34,423 rows), and ton-iot.csv (19 rows). All three loaders were written, validated against schema, and integrated into the merge pipeline.",
     tags:  ["Dataset Audit", "34K rows recovered", "3 loaders added", "Timestamp analysis"],
     owner: "ml",
     Icon:  SearchCode,
   },
   {
     date:  "Mar 11 PM",
-    title: "85.15%",
-    quote: "Retraining on the complete leakage-corrected dataset: 85.15% accuracy, ROC-AUC 0.9545.",
-    body:  "The expanded dataset of 111,499 merged rows was rebalanced via SMOTE to a 51,735/51,735 class distribution. Final evaluation: RF Accuracy 85.15%, ROC-AUC 0.9545, Fraud Precision 0.7682, Recall 0.9259, F1 0.8397. Stale model artefacts from discarded experiments — lightgbm.pkl, xgboost.pkl, xgboost.onnx, voting_ensemble.pkl, voting_ensemble.onnx — were removed from the repository. None were referenced by the active inference pipeline.",
-    tags:  ["111K rows", "85.15% accuracy", "ROC-AUC 0.9545", "Artefact cleanup"],
+    title: "85.24%",
+    quote: "Retraining on the complete leakage-corrected dataset: 85.24% accuracy, ROC-AUC 0.9546.",
+    body:  "The expanded 111,499-row dataset rebalanced by SMOTE to 51,735/51,735 yielded: RF Accuracy 85.24%, ROC-AUC 0.9546, Precision 0.7709, Recall 0.9229, F1 0.8401. Stale artefacts — lightgbm, xgboost, voting ensemble — were removed from the repository.",
+    tags:  ["111K rows", "85.24% accuracy", "ROC-AUC 0.9546", "Artefact cleanup"],
     owner: "ml",
     Icon:  Zap,
   },
@@ -152,7 +152,7 @@ const MILESTONES: Milestone[] = [
     date:  "Mar 11",
     title: "Finalisation and Deployment",
     quote: "The margin between a functional system and a deployable one is defined by the quality of its finishing details.",
-    body:  "A dot-grid body texture and surface-gradient card utility were applied across the frontend. The amber token (#D97706) was separated from the saffron accent to provide a visually distinct classification colour for FLAG-severity verdicts. The repository was migrated to the Varaksha-G organisation, the Cloudflare Pages project was recreated under the new identity, all documentation was updated, and the build timeline page was published.",
+    body:  "A dot-grid body texture and surface-gradient card utility were applied across the frontend; the amber token was separated from saffron to provide a distinct FLAG verdict colour. Repository migrated to Varaksha-G org, Cloudflare Pages project recreated under the new identity, and the build timeline page published.",
     tags:  ["dot-grid texture", "Amber FLAG", "Organisation transfer", "Cloudflare"],
     owner: "both",
     Icon:  Rocket,
@@ -161,8 +161,8 @@ const MILESTONES: Milestone[] = [
     date:  "Mar 12",
     title: "Target Leakage Audit",
     quote: "A ROC-AUC of 0.9952 on heterogeneous multi-source tabular data is a red flag, not a cause for celebration.",
-    body:  "A review of all dataset loaders found three target-leakage bugs. In _load_behavior_extended (34,423 rows) and _load_ton_iot, the is_new_device feature was a direct copy of the fraud label. In _load_cdr_fraud (24,543 rows), merchant_category was constructed by mapping fraud_type — the label source — to category strings. All three bugs are fixed: is_new_device set to 0.0 for the affected loaders; CDR rows use a flat \"UTILITY\" category. Models retrained: RF Accuracy 85.15%, ROC-AUC 0.9545, Recall 0.9259, F1 0.8397.",
-    tags:  ["Target leakage", "3 loaders fixed", "RF 85.15%", "ROC-AUC 0.9545"],
+    body:  "A review of all dataset loaders found four target-leakage bugs: in three loaders (60,141 rows combined) is_new_device was a direct copy of the fraud label, and in CDR fraud merchant_category encoded fraud_type as category strings. All four fixed; models retrained: RF Accuracy 85.24%, ROC-AUC 0.9546, Recall 0.9229, F1 0.8401.",
+    tags:  ["Target leakage", "4 loaders fixed", "RF 85.24%", "ROC-AUC 0.9546"],
     owner: "ml",
     Icon:  SearchCode,
   },
@@ -183,7 +183,7 @@ const STORYBOARD = [
   {
     num:   "03",
     label: "The Outcome",
-    body:  "85.15% detection accuracy. ROC-AUC 0.9545. Sub-5ms P99 gateway latency. Four BIS money-mule typologies detected autonomously. Fraud alerts in 22 Indian languages, with legal citations embedded. Recall 0.9259 — catches 93 in every 100 fraud transactions. Built, trained, and deployed to global edge in 12 days.",
+    body:  "85.24% detection accuracy. ROC-AUC 0.9546. Sub-5ms P99 gateway latency. Four BIS money-mule typologies detected autonomously. Fraud alerts in 8 Indian languages, with legal citations embedded. Recall 0.9229 — catches 92 in every 100 fraud transactions. Built, trained, and deployed to global edge in 12 days.",
   },
 ];
 
@@ -268,7 +268,7 @@ function Chip({ owner }: { owner: Owner }) {
       <div className="flex items-center gap-1.5">
         <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: PINK }} />
         <span
-          className="font-barlow text-[0.5rem] tracking-[0.22em] uppercase"
+          className="font-barlow text-[0.63rem] tracking-[0.2em] uppercase"
           style={{
             backgroundImage: `linear-gradient(90deg, ${PINK}, ${BLUE})`,
             WebkitBackgroundClip: "text",
@@ -285,7 +285,7 @@ function Chip({ owner }: { owner: Owner }) {
   return (
     <div className="flex items-center gap-1.5">
       <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-      <span className="font-barlow text-[0.5rem] tracking-[0.22em] uppercase" style={{ color }}>
+      <span className="font-barlow text-[0.63rem] tracking-[0.2em] uppercase" style={{ color }}>
         {LABEL[owner]}
       </span>
     </div>
@@ -340,7 +340,7 @@ function Card({ ms, side }: { ms: Milestone; side: "left" | "right" | "center" }
       <div className="bg-white/55 backdrop-blur-sm px-5 py-5 lg:px-6 lg:py-6 transition-shadow duration-300 group-hover:shadow-[0_4px_24px_rgba(15,30,46,0.07)]">
         <div className="flex items-start justify-between gap-4 mb-3">
           <Chip owner={ms.owner} />
-          <span className="font-courier text-[0.48rem] tracking-[0.18em] text-ink/25 whitespace-nowrap pt-px">
+          <span className="font-courier text-[0.6rem] tracking-[0.14em] text-ink/40 whitespace-nowrap pt-px">
             {ms.date}
           </span>
         </div>
@@ -352,18 +352,18 @@ function Card({ ms, side }: { ms: Milestone; side: "left" | "right" | "center" }
         </h3>
         <p
           className="font-playfair italic leading-snug mb-3"
-          style={{ fontSize: "0.8rem", color: isBoth ? PINK : color, opacity: 0.85 }}
+              style={{ fontSize: "0.88rem", color: isBoth ? PINK : color, opacity: 0.9 }}
         >
           &ldquo;{ms.quote}&rdquo;
         </p>
-        <p className="font-barlow text-[0.71rem] text-ink/48 leading-relaxed mb-4">
+        <p className="font-barlow text-[0.82rem] text-ink/65 leading-relaxed mb-4">
           {ms.body}
         </p>
         <div className="flex flex-wrap gap-1.5">
           {ms.tags.map((t, i) => (
             <span
               key={i}
-              className="font-courier text-[0.45rem] tracking-widest uppercase px-2 py-0.5 rounded-full"
+              className="font-courier text-[0.58rem] tracking-wide uppercase px-2 py-0.5 rounded-full"
               style={{
                 color:           isBoth ? "#6b7280" : color,
                 backgroundColor: isBoth ? "rgba(0,0,0,0.03)" : `${color}0c`,
@@ -419,7 +419,7 @@ export default function TimelinePage() {
       </header>
 
       {/* Hero */}
-      <section className="px-6 lg:px-12 pt-14 pb-12 max-w-5xl mx-auto">
+      <section className="px-6 lg:px-12 pt-14 pb-12 max-w-6xl mx-auto">
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -487,7 +487,7 @@ export default function TimelinePage() {
       </section>
 
       {/* Storyboard */}
-      <section className="px-6 lg:px-12 pb-16 max-w-5xl mx-auto">
+      <section className="px-6 lg:px-12 pb-16 max-w-6xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-ink/8">
           {STORYBOARD.map((s, i) => (
             <motion.div
@@ -512,7 +512,7 @@ export default function TimelinePage() {
               <h3 className="font-playfair font-bold text-ink text-[1rem] mb-2">
                 {s.label}
               </h3>
-              <p className="font-barlow text-[0.72rem] text-ink/48 leading-relaxed">
+              <p className="font-barlow text-[0.8rem] text-ink/62 leading-relaxed">
                 {s.body}
               </p>
             </motion.div>
@@ -521,7 +521,7 @@ export default function TimelinePage() {
       </section>
 
       {/* Timeline */}
-      <section ref={containerRef} className="px-4 lg:px-12 max-w-5xl mx-auto relative">
+      <section ref={containerRef} className="px-3 sm:px-6 lg:px-10 max-w-6xl mx-auto relative">
 
         {/* Animated spine — desktop */}
         <div
@@ -553,7 +553,7 @@ export default function TimelinePage() {
               <div key={i} className="relative">
 
                 {/* Mobile layout */}
-                <div className="lg:hidden flex items-start gap-4 pl-10 pb-10">
+                <div className="lg:hidden flex items-start gap-4 pl-8 pb-8">
                   <div className="absolute left-[3px] top-0">
                     <SpineNode ms={ms} />
                   </div>
@@ -596,7 +596,7 @@ export default function TimelinePage() {
       </section>
 
       {/* Future Scope */}
-      <section className="px-6 lg:px-12 max-w-5xl mx-auto mt-28">
+      <section className="px-6 lg:px-12 max-w-6xl mx-auto mt-28">
 
         {/* Section header */}
         <motion.div
@@ -664,7 +664,7 @@ export default function TimelinePage() {
                 </h4>
 
                 {/* Blurb */}
-                <p className="font-barlow text-[0.64rem] text-ink/40 leading-relaxed mb-4">
+                <p className="font-barlow text-[0.72rem] text-ink/55 leading-relaxed mb-4">
                   {item.blurb}
                 </p>
 

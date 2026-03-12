@@ -563,11 +563,11 @@ SMOTE applied: 51,735 legit / 51,735 fraud after resampling.
 
 | Metric | Value |
 |---|---|
-| RF Accuracy | **85.15%** |
-| RF ROC-AUC | **0.9545** |
-| Fraud Precision | 0.7682 |
-| Fraud Recall | 0.9259 |
-| Fraud F1 | **0.8397** |
+| RF Accuracy | **85.24%** |
+| RF ROC-AUC | **0.9546** |
+| Fraud Precision | 0.7709 |
+| Fraud Recall | 0.9229 |
+| Fraud F1 | **0.8401** |
 
 #### Cleanup
 
@@ -611,7 +611,7 @@ Landing page metric card updated to reflect Phase 8 retrain results:
 
 | Field | Before | After |
 |---|---|---|
-| Accuracy | 94.4% | **85.15%** |
+| Accuracy | 94.4% | **85.24%** |
 | Training data note | 75K rows · 4 real datasets | **111K rows · 7 real datasets** |
 
 #### Repository transfer
@@ -627,7 +627,7 @@ GitHub repository transferred from `Vibhor2702/Varaksha` to `Varaksha-G/Varaksha
 
 #### Problem identified
 
-Post-training ROC-AUC of **0.9952** was suspiciously high. A code review of every dataset loader revealed three target-leakage bugs — features that were mechanically derived from the fraud label, giving the model a direct or near-direct signal of the answer at training time.
+Post-training ROC-AUC of **0.9952** was suspiciously high. A code review of every dataset loader revealed four target-leakage bugs — features that were mechanically derived from the fraud label, giving the model a direct or near-direct signal of the answer at training time.
 
 #### Leakage 1 — `_load_behavior_extended` (`is_new_device` = `is_fraud`)
 
@@ -641,11 +641,15 @@ df["is_new_device"] = 0.0   # no per-session device-novelty data in this loader
 
 `remaining_behavior_ext.csv` contains 34,423 rows — the largest single contributor to the merged dataset. For all 34K rows `is_new_device` was a perfect copy of the label. The Random Forest trivially scored this subset, artificially pulling AUC to near-1.0.
 
-#### Leakage 2 — `_load_ton_iot` (`is_new_device` = `is_fraud`)
+#### Leakage 2 — `_load_supervised_behavior` (`is_new_device` = `is_fraud`)
 
-Identical error in the ToN-IoT loader (19 rows). Fixed the same way.
+Identical error in the Supervised Behavior loader (1,699 rows). Fixed the same way — `is_new_device = 0.0`.
 
-#### Leakage 3 — `_load_cdr_fraud` (`merchant_category` encodes `fraud_type`)
+#### Leakage 3 — `_load_ton_iot` (`is_new_device` = `is_fraud`)
+
+Identical error in the ToN-IoT loader (19 rows). Fixed the same way — `is_new_device = 0.0`.
+
+#### Leakage 4 — `_load_cdr_fraud` (`merchant_category` encodes `fraud_type`)
 
 ```python
 # BEFORE (leaking)
@@ -666,11 +670,11 @@ The fraud label is derived as `fraud_type != "none"`. The mapping above created 
 
 #### Why the AUC looked plausible
 
-The three leakage sources each affected a different loader, so no single suspicious metric was visible by dataset. The overall AUC rise from 0.9869 (Phase 6) to 0.9952 (Phase 8) was attributed to "more data" — plausible on its face. The tell was that 0.9952 is unusually high for a tabular fraud problem with heterogeneous multi-source data that doesn't share a common distribution. Post-fix AUC: **0.9545**.
+The four leakage sources each affected a different loader, so no single suspicious metric was visible by dataset. The overall AUC rise from 0.9869 (Phase 6) to 0.9952 (Phase 8) was attributed to "more data" — plausible on its face. The tell was that 0.9952 is unusually high for a tabular fraud problem with heterogeneous multi-source data that doesn't share a common distribution. Post-fix AUC: **0.9546**.
 
 #### Impact
 
-All three leakage bugs have been corrected in `train_ensemble.py`. Models retrained immediately. Final metrics: RF Accuracy **85.15%**, ROC-AUC **0.9545**, Fraud Precision 0.7682, Recall 0.9259, F1 0.8397.
+All four leakage bugs have been corrected in `train_ensemble.py`. Models retrained immediately. Final metrics: RF Accuracy **85.24%**, ROC-AUC **0.9546**, Fraud Precision 0.7709, Recall 0.9229, F1 0.8401.
 
 | Loader | Leakage type | Feature | Fix |
 |---|---|---|---|

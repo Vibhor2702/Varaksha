@@ -350,7 +350,7 @@ function StepDetail({ step, idx }: { step: StepDef; idx: number }) {
         >
           {step.title}
         </h2>
-        <p className="font-barlow text-[0.74rem] text-ink/42 leading-relaxed mb-6 max-w-2xl">
+        <p className="font-barlow text-[0.74rem] text-ink/58 leading-relaxed mb-6 max-w-2xl">
           {step.kicker}
         </p>
 
@@ -484,7 +484,7 @@ function VerdictBanner() {
           ALLOW
         </motion.p>
 
-        <p className="font-barlow text-[0.8rem] text-ink/45 mb-8">
+        <p className="font-barlow text-[0.8rem] text-ink/58 mb-8">
           ₹4,750 cleared to merchant@kirana &mdash; all five layers passed, every signal clean.
         </p>
 
@@ -623,7 +623,7 @@ export default function FlowPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.18 }}
-          className="font-barlow text-[0.86rem] text-ink/45 max-w-xl mb-10 leading-relaxed"
+          className="font-barlow text-[0.86rem] text-ink/58 max-w-xl mb-10 leading-relaxed"
         >
           Click through each layer at your own pace. See exactly what Varaksha
           does with a real payment &mdash; from the moment it leaves the phone

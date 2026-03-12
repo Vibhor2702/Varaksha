@@ -55,9 +55,9 @@ const metrics = [
   },
   {
     kicker: "Model Performance",
-    value: "85.15%",
+    value: "85.24%",
     label: "Random Forest Accuracy",
-    sub: "111K rows · 7 real datasets · ROC-AUC 0.9545",
+    sub: "111K rows · 7 real datasets · ROC-AUC 0.9546",
     source: "Varaksha · trained Mar 2026",
     accent: "bg-allow",           // green top-bar
     valueColor: "text-allow",
@@ -156,7 +156,7 @@ export default function PitchPage() {
         {/* Subheadline */}
         <motion.p
           variants={fadeUp}
-          className="font-playfair italic text-ink/60 mb-10"
+          className="font-playfair italic text-ink/70 mb-10"
           style={{ fontSize: "clamp(1.1rem, 2.4vw, 1.9rem)" }}
         >
           UPI Fraud Defense Network &mdash; Version II
@@ -223,7 +223,7 @@ export default function PitchPage() {
                 </p>
 
                 {/* Sub-label — pushed to the bottom by mb-auto */}
-                <p className="font-barlow text-[0.78rem] text-ink/42 mb-auto pb-4">
+                <p className="font-barlow text-[0.78rem] text-ink/55 mb-auto pb-4">
                   {m.sub}
                 </p>
 
