@@ -97,6 +97,30 @@ async fn check_tx(
 
     let tx = body.into_inner();
 
+    // ── DPDP Act 2023 §4(1) — Consent Gate ────────────────────────────────────
+    // PRODUCTION TODO: Replace this stub with a real Consent Manager SDK call.
+    //
+    // Before hashing or touching `tx.vpa` (personal data per §2(t)) the handler
+    // MUST verify that a valid, unexpired consent artefact covering the purpose
+    // "fraud-risk-check" exists for this data principal.
+    //
+    // Pseudocode for production:
+    //
+    //   let token = match &tx.consent_token {
+    //       Some(t) if !t.is_empty() => t,
+    //       _ => return HttpResponse::UnprocessableEntity().json(serde_json::json!({
+    //               "error": "CONSENT_REQUIRED",
+    //               "detail": "DPDP Act 2023 §4(1): consent_token is mandatory"
+    //           })),
+    //   };
+    //   consent_manager.verify(token, "fraud-risk-check", &tx.vpa).await?;
+    //   // log consent artefact ID with trace_id for §12 audit trail
+    //
+    // Until this check is wired to a real Consent Manager, only deploy this
+    // gateway on internal PSP infrastructure where the upstream caller has
+    // already obtained and validated the data principal's consent independently.
+    // ──────────────────────────────────────────────────────────────────────────
+
     let vpa_hash = hash_vpa(&tx.vpa);
 
     let (risk_score, reason) = data.cache.get(&vpa_hash);

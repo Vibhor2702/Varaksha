@@ -106,6 +106,45 @@ export default function RootLayout({
           </div>
         </nav>
         {children}
+
+        {/*
+         * ── DPDP Act 2023 Notice ──────────────────────────────────────────────
+         * §5 and DPDP Rules 2025 Rule 3 require a notice to be provided to the
+         * Data Principal before or at the time data is collected.
+         *
+         * This site is a demonstration and research prototype.  No personal data
+         * is collected, stored, or transmitted to any server by this website.
+         * All transaction flows shown on the /live page use synthetic VPAs
+         * generated from hardcoded seed data.  The sandbox form processes inputs
+         * entirely inside your browser — nothing leaves your device.
+         *
+         * If you deploy the Varaksha backend gateway in production, you must:
+         *   1. Obtain free, specific, informed and unambiguous consent per §6
+         *      before passing any real VPA to POST /v1/tx.
+         *   2. Provide a privacy notice in the Data Principal's preferred language
+         *      per DPDP Rules 2025 Rule 3.
+         *   3. Register as a Data Fiduciary if processing personal data at scale
+         *      per §10 (Significant Data Fiduciary criteria).
+         *   4. Implement Data Principal rights (access, correction, erasure,
+         *      nomination, grievance) per §§12–13.
+         *
+         * For grievances contact: privacy@varaksha.dev (placeholder)
+         * ────────────────────────────────────────────────────────────────────────
+         */}
+        <footer className="border-t border-ink/[0.07] mt-0 py-4 px-6 lg:px-12">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <p className="font-barlow text-[0.6rem] text-ink/35 leading-relaxed max-w-2xl">
+              <span className="font-semibold text-ink/50">Demo prototype.</span>{" "}
+              No personal data is collected or transmitted. All transactions on this site use synthetic data.
+              {" "}Varaksha backend deployments must obtain user consent per{" "}
+              <span className="text-ink/50">DPDP Act 2023 §4(1)</span> before processing real VPAs.
+            </p>
+            <p className="font-barlow text-[0.58rem] text-ink/25 shrink-0">
+              Grievances:{" "}
+              <span className="text-ink/40">privacy@varaksha.dev</span>
+            </p>
+          </div>
+        </footer>
       </body>
     </html>
   );

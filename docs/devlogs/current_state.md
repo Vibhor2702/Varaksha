@@ -1,7 +1,7 @@
 # Varaksha V2 — Current State Snapshot
 
 > **Last updated:** March 12, 2026  
-> **Branch:** `test` · **Latest commit:** `cb9ef30`  
+> **Branch:** `test` · **Latest commit:** `2e806e6`  
 > **Live deploy:** `8dfb8b4b.varaksha.pages.dev`  
 >
 > This document is a point-in-time spec sheet + architecture reference.
@@ -12,20 +12,27 @@
 
 ## Table of Contents
 
-- [Model Metrics](#model-metrics)
-- [Architecture Overview](#architecture-overview)
-- [Layer-by-Layer Spec](#layer-by-layer-spec)
-  - [L1 — ML Scoring Engine](#l1--ml-scoring-engine-serviceslocalengine)
-  - [L2 — Rust Privacy Gateway](#l2--rust-privacy-gateway-gateway)
-  - [L3 — Graph Mule Detector](#l3--graph-mule-detector-servicesgraph)
-  - [L4 — Multilingual Alert Agent](#l4--multilingual-alert-agent-servicesagents)
-  - [L5 — Next.js /live Dashboard](#l5--nextjs-live-dashboard-frontendapplive)
-- [Frontend](#frontend-frontend)
-- [Datasets](#datasets)
-- [Model Artefacts](#model-artefacts)
-- [Dependencies](#dependencies)
-- [Directory Map](#directory-map)
-- [Run Commands](#run-commands)
+- [Varaksha V2 — Current State Snapshot](#varaksha-v2--current-state-snapshot)
+  - [Table of Contents](#table-of-contents)
+  - [Model Metrics](#model-metrics)
+  - [Architecture Overview](#architecture-overview)
+  - [Layer-by-Layer Spec](#layer-by-layer-spec)
+    - [L1 — ML Scoring Engine (`services/local_engine/`)](#l1--ml-scoring-engine-serviceslocal_engine)
+    - [L2 — Rust Privacy Gateway (`gateway/`)](#l2--rust-privacy-gateway-gateway)
+    - [L3 — Graph Mule Detector (`services/graph/`)](#l3--graph-mule-detector-servicesgraph)
+    - [L4 — Multilingual Alert Agent (`services/agents/`)](#l4--multilingual-alert-agent-servicesagents)
+    - [L5 — Next.js /live Dashboard (`frontend/app/live/`)](#l5--nextjs-live-dashboard-frontendapplive)
+  - [Frontend (`frontend/`)](#frontend-frontend)
+  - [Datasets](#datasets)
+  - [Model Artefacts](#model-artefacts)
+  - [Dependencies](#dependencies)
+    - [Python runtime (`requirements.txt`)](#python-runtime-requirementstxt)
+    - [Python training only (`requirements-train.txt`)](#python-training-only-requirements-traintxt)
+    - [Rust (`gateway/Cargo.toml`)](#rust-gatewaycargotoml)
+    - [Frontend (`frontend/package.json`)](#frontend-frontendpackagejson)
+  - [Directory Map](#directory-map)
+  - [Run Commands](#run-commands)
+  - [DPDP Act 2023 Compliance](#dpdp-act-2023-compliance)
 
 ---
 
@@ -424,4 +431,60 @@ cd frontend && npm install && npm run dev
 # ── Frontend (build + deploy to Cloudflare Pages) ─────────────────────────
 cd frontend && npm run build
 npx wrangler pages deploy frontend/out --project-name varaksha --branch test --commit-dirty=true
+```
+
+---
+
+## DPDP Act 2023 Compliance
+
+Relevant law: **Digital Personal Data Protection Act, 2023** + **DPDP Rules, 2025**.
+
+### Personal data surfaces and their status
+
+| Surface | Personal data? | Current handling | Gap / Action |
+|---|---|---|---|
+| `POST /v1/tx` — `vpa` field | **YES** — phone-number VPAs are §2(t) personal data | SHA-256 hashed at ingress before any storage | `consent_token` field added to `TxRequest`; handler consent-gate stub present; **production must wire to Consent Manager** |
+| `POST /v1/tx` — `device_id` | **YES** — device fingerprint is personal data | Documented as "must be pre-hashed client-side" | Enforcement is contractual (PSP obligation); add validation in production |
+| DashMap cache `{vpa_hash, …}` | No — SHA-256 digest is pseudonymous | TTL-evicted in-memory only | Clean |
+| Frontend sandbox (`/live`) | No — `deriveSandboxResult()` is pure browser-side JS | No network call made; nothing leaves the browser | Clean |
+| Google Fonts CDN | IP address hits Google CDN on page load | Third-party processor | Disclose in privacy notice for production deployments |
+| ML training data | No — synthetic / public datasets only | N/A | Clean |
+| Graph agent | Pushes only pre-hashed `vpa_hash` | N/A | Clean |
+| Alert agent | Receives only `vpa_hash` | N/A | Clean |
+
+### Key DPDP obligations and implementation status
+
+| Obligation | Act reference | Status |
+|---|---|---|
+| Lawful purpose + consent before processing VPA | §4(1), §6 | ⚠️ Consent token field + handler stub added; full CM integration is production TODO |
+| Notice to Data Principal (language, purpose, rights) | §5, Rules 2025 Rule 3 | ⚠️ Footer notice on frontend; production must add dedicated privacy notice page |
+| Purpose limitation — fraud-risk scoring only | §6(3), §7(e) | ✅ No secondary use of hash or score |
+| Data minimisation — no raw PII in cache | §6(3) | ✅ Only `{vpa_hash, risk_score, reason}` stored |
+| TTL / retention policy | §6(3), §9(6) | ⚠️ TTL field exists in `CacheUpdateRequest`; background eviction task not yet implemented — production TODO |
+| Data Principal rights (access, correction, erasure, nomination, grievance) | §§12–13 | ⚠️ Grievance contact placeholder added to frontend footer; no rights portal yet |
+| Significant Data Fiduciary registration (>10 M principals, or govt notification) | §10 | N/A for current demo scale |
+| Webhook HMAC-SHA256 signature on graph→gateway | DPDP security obligations, also IT Act §43A | ✅ Implemented |
+
+### Production consent flow (required before real-data deployment)
+
+```
+User (Data Principal)
+  │
+  ├─ 1. PSP shows DPDP Notice (§5 / Rules 2025 Rule 3)
+  │      Language = user's chosen language or English
+  │      Purpose  = "Detecting and preventing UPI payment fraud"
+  │      Fiduciary = [Bank / PSP name]
+  │
+  ├─ 2. User grants consent (free, specific, informed, unconditional, unambiguous)
+  │      Consent Manager issues Consent Artefact ID  →  token = "ca_xxxx"
+  │
+  └─ 3. PSP calls  POST /v1/tx  with body:
+             { "vpa": "...", "device_id": "<pre-hashed>",
+               "consent_token": "ca_xxxx", ... }
+
+Gateway (Data Fiduciary processor)
+  ├─ Validates consent_token via Consent Manager SDK
+  ├─ Hashes VPA (personal data never stored beyond this point)
+  └─ Returns { vpa_hash, verdict, risk_score, trace_id }
+         with consent artefact ID logged against trace_id for §12(a) access rights
 ```

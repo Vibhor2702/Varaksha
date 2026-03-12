@@ -260,3 +260,32 @@ All files go under `data/datasets/`. The trainer auto-discovers and merges every
 
 A security engineer and an ML engineer who share the view that robust fraud detection requires both disciplines to operate at the same layer of the stack — not sequentially, but together.
 
+---
+
+## Legal Compliance — DPDP Act 2023
+
+The **Digital Personal Data Protection (DPDP) Act, 2023** and its **2025 Rules** require unambiguous, free, specific, informed consent before collecting any personal data (§4(1), §6).  A VPA that contains a phone number (e.g. `9876543210@ybl`) is personal data under §2(t).  Device fingerprints are personal data under the same definition.
+
+### Current demo status — compliant for the prototype
+
+| Data surface | Personal data? | Varaksha's position |
+|---|---|---|
+| Frontend sandbox (`/live`) | No — all logic is client-side JS, nothing leaves the browser | Compliant |
+| Gateway `POST /v1/tx` — raw VPA | **Yes** | Hash applied at ingress before any storage; consent token field added to `TxRequest`; full consent validation is a production TODO (see `gateway/src/models.rs` and `main.rs`) |
+| Gateway `POST /v1/tx` — `device_id` | **Yes** | Must be pre-hashed by the PSP before transmission; documented in `models.rs` |
+| DashMap cache `{vpa_hash, …}` | No — SHA-256 digest is pseudonymous | Compliant |
+| ML training data | No — synthetic / public datasets | Compliant |
+| Graph agent | Pushes only pre-hashed VPAs | Compliant |
+| Alert agent | Receives only `vpa_hash` | Compliant |
+
+### Production checklist (before deploying with real transaction data)
+
+1. **Notice** — Provide the notice required by §5 and DPDP Rules 2025 Rule 3 in the Data Principal's preferred language before or at the time of first data collection.
+2. **Consent** — Obtain free, specific, informed, unconditional and unambiguous consent per §6.  Drive via a DPDP-compliant Consent Manager (AA framework); pass the Consent Artefact ID as `consent_token` in every `POST /v1/tx` request.
+3. **Consent validation** — Enable the `consent_token` gate stub in `gateway/src/main.rs` (`check_tx` handler) to reject requests without a valid, unexpired artefact.
+4. **Purpose limitation** — The stated purpose is fraud-risk scoring under §7(e) (prevention, detection, investigation of offences).  Do not reuse the data for any other purpose without fresh consent.
+5. **Retention** — Define and enforce a TTL policy for DashMap cache entries.  Implement the background eviction task noted in `gateway/src/cache.rs` TODO.  Maximum recommended retention: 90 days for flagged VPAs, 30 days for ALLOW.
+6. **Data Principal rights** — Implement endpoints for access (§12(a)), correction (§12(b)), erasure (§12(c)), and grievance redressal (§13).
+7. **Significant Data Fiduciary** — If processing personal data of more than 10 million Data Principals or if the Central Government so notifies, register as a Significant Data Fiduciary per §10 and appoint a Data Protection Officer.
+8. **Third-party fonts** — The frontend loads fonts from Google Fonts CDN.  In a production deployment targeting Indian users, either self-host the fonts or disclose Google as a data processor in the privacy notice (IP addresses are processed by Google).
+

@@ -769,6 +769,79 @@ All four leakage bugs have been corrected in `train_ensemble.py`. Models retrain
 
 ---
 
+### Phase 13 — DPDP Act 2023 Compliance Audit & Hardening
+
+**Date:** March 12, 2026  
+**Commit:** pending  
+**Files:** `gateway/src/models.rs`, `gateway/src/main.rs`, `frontend/app/layout.tsx`, `README.md`, `docs/devlogs/current_state.md`, `docs/devlogs/DEVLOG.md`
+
+#### Context
+
+The **Digital Personal Data Protection (DPDP) Act, 2023** and its **2025 Rules** require free, specific, informed, unconditional and unambiguous consent (§4(1), §6) before processing personal data. A VPA containing a phone number (e.g. `9876543210@ybl`) is personal data under §2(t). Device fingerprints are personal data by the same definition. This phase audited every data surface in the system against the Act and hardened the three surfaces that had gaps.
+
+#### Audit findings
+
+| Surface | Personal data? | Finding |
+|---|---|---|
+| `POST /v1/tx` — `vpa` | YES | No consent token or validation — gap |
+| `POST /v1/tx` — `device_id` | YES | "Hash client-side ideally" advisory, not enforced — gap |
+| DashMap cache `{vpa_hash, …}` | No | Clean |
+| Frontend sandbox (`/live`) | No | `deriveSandboxResult()` is pure browser-side, no network call — clean |
+| Google Fonts CDN | IP hit | No disclosure — minor gap |
+| ML training data | No | Synthetic/public datasets — clean |
+| Graph agent | No | Pushes only pre-hashed VPAs — clean |
+| Alert agent | No | Receives only `vpa_hash` — clean |
+
+#### Changes
+
+**`gateway/src/models.rs`:**
+- Added `consent_token: Option<String>` field to `TxRequest`
+- Added comprehensive DPDP §4(1)/§6 documentation block on the struct explaining:
+  - That `vpa` and `device_id` are personal data under §2(t)
+  - The three obligations a PSP must satisfy before calling the endpoint (notice, consent, purpose limitation)
+  - Production TODO: reject requests without valid consent token, call Consent Manager SDK
+  - Penalty reference: up to ₹250 crore under DPDP Schedule 1
+- Tightened `device_id` field comment to explicitly require client-side pre-hashing
+
+**`gateway/src/main.rs` — `check_tx` handler:**
+- Added DPDP §4(1) consent gate comment block immediately before `hash_vpa()` call
+- The comment provides the exact production pseudocode to:
+  1. Reject requests where `consent_token` is absent/empty with HTTP 422 + `CONSENT_REQUIRED`
+  2. Verify the token via Consent Manager SDK for "fraud-risk-check" purpose
+  3. Log the artefact ID against the `trace_id` for §12(a) access rights audit trail
+- Makes clear that until wired to a real Consent Manager, the gateway must only be deployed on internal PSP infrastructure
+
+**`frontend/app/layout.tsx`:**
+- Added DPDP §5 / Rules 2025 Rule 3 notice as a site footer
+- Notice states: demo prototype, no personal data collected or transmitted, all data synthetic
+- States production deployments require consent per §4(1) before processing real VPAs
+- Includes grievance contact placeholder (`privacy@varaksha.dev`) per §13
+- Added in-code comment citing the specific DPDP sections this notice satisfies
+
+**`README.md`:**
+- Added "## Legal Compliance — DPDP Act 2023" section
+- Table: every data surface, personal-data status, and compliance position
+- 8-point production checklist covering notice, consent, consent validation, purpose limitation, retention, Data Principal rights, SDF registration, and third-party fonts
+
+**`docs/devlogs/current_state.md`:**
+- Updated commit ref to `2e806e6`
+- Added `[DPDP Act 2023 Compliance](#dpdp-act-2023-compliance)` to TOC
+- Added full DPDP compliance section covering:
+  - Personal data surfaces table
+  - Obligations-status table (consent, notice, purpose limitation, minimisation, retention, rights, SDF, HMAC)
+  - Production consent flow diagram (User → PSP → Consent Manager → Gateway)
+
+#### What is NOT yet done (production TODOs)
+
+- Integrate a real DPDP-compliant Consent Manager (AA framework or RBI-regulated CM)
+- Implement the consent-token validation in `check_tx` (the stub is there)
+- Build Data Principal rights endpoints (access §12(a), correction §12(b), erasure §12(c))
+- Implement DashMap TTL background eviction task
+- Add a dedicated Privacy Notice page to the frontend (current footer notice is minimal)
+- Replace Google Fonts CDN with self-hosted fonts for production deployments
+
+---
+
 ## Honest Caveats
 
 **The Rust cache is a stub.** Until the teammate fills in `RiskCache::get()` and
