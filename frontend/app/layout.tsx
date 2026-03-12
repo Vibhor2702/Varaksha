@@ -63,7 +63,7 @@ export default function RootLayout({
        */}
       <body className="bg-cream text-ink font-barlow antialiased">
         {/* ── Site-wide navigation ── */}
-        <nav className="sticky top-0 z-50 border-b border-ink/10 bg-cream/90 backdrop-blur-sm shadow-[0_1px_18px_rgba(15,30,46,0.07)]">
+        <nav className="sticky top-0 z-50 border-b border-white/40 bg-white/25 backdrop-blur-xl shadow-[0_2px_32px_rgba(15,30,46,0.10),inset_0_1px_0_rgba(255,255,255,0.6)]">
           <div className="max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between h-11">
             <Link
               href="/"
@@ -71,29 +71,35 @@ export default function RootLayout({
             >
               Varaksha<span className="text-saffron">.</span>
             </Link>
-            <div className="flex items-center gap-6">
-              <Link
-                href="/"
-                className="font-barlow text-[0.65rem] tracking-[0.22em] uppercase text-ink/50 hover:text-ink transition-colors"
-              >
-                Overview
-              </Link>
-              <Link
-                href="/flow"
-                className="font-barlow text-[0.65rem] tracking-[0.22em] uppercase text-ink/50 hover:text-ink transition-colors"
-              >
-                How It Works
-              </Link>
-              <Link
-                href="/timeline"
-                className="font-barlow text-[0.65rem] tracking-[0.22em] uppercase text-ink/50 hover:text-ink transition-colors"
-              >
-                Timeline
-              </Link>
+            <div className="flex items-center gap-1">
+              {(
+                [
+                  { href: "/",        label: "Overview"     },
+                  { href: "/flow",    label: "How It Works" },
+                  { href: "/timeline",label: "Timeline"     },
+                ] as const
+              ).map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="group relative font-barlow text-[0.65rem] tracking-[0.22em] uppercase text-ink/50 hover:text-ink px-3 py-1.5 rounded-sm cursor-pointer transition-all duration-200 hover:bg-ink/[0.06] active:scale-95"
+                >
+                  {label}
+                  {/* animated underline */}
+                  <span className="absolute bottom-0.5 left-3 right-3 h-px bg-ink/30 scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left" />
+                </Link>
+              ))}
+
+              {/* Live Demo — blinking green */}
               <Link
                 href="/live"
-                className="font-barlow text-[0.65rem] tracking-[0.22em] uppercase bg-ink text-cream px-3 py-1.5 hover:bg-saffron hover:text-ink transition-colors"
+                className="ml-3 flex items-center gap-2 font-barlow text-[0.65rem] tracking-[0.22em] uppercase bg-ink text-cream px-3 py-1.5 rounded-sm cursor-pointer hover:bg-ink/80 active:scale-95 transition-all duration-200 shadow-[0_2px_12px_rgba(15,30,46,0.25)] hover:shadow-[0_4px_20px_rgba(15,30,46,0.35)]"
               >
+                {/* pulse dot */}
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-80" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+                </span>
                 Live Demo
               </Link>
             </div>
