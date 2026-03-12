@@ -21,7 +21,7 @@ Develop an AI/ML solution to identify fraudulent transactions in the Unified Pay
 | 1 | Implement **anomaly detection** techniques to identify unusual transaction patterns | `IsolationForest` trained on 111 K rows — 16 behavioural features including hour-of-day sin/cos, amount log-transform, device-seen flag |
 | 2 | Explore **ensemble methods or deep learning** to improve prediction accuracy | `RandomForest` (300 trees) fused with `IsolationForest` scores → composite risk 0–1; ROC-AUC **0.9546** |
 | 3 | Address **imbalanced datasets** using techniques like SMOTE | `imblearn.SMOTE` applied to training split only; held-out test set preserves natural 42 % fraud ratio |
-| 4 | Develop a **user-friendly dashboard** for visualising transaction risks and fraud alerts | Streamlit dashboard (`services/demo/app.py`) + full interactive Next.js 15 web UI with live transaction simulator, evidence report, and 8-language audio alert |
+| 4 | Develop a **user-friendly dashboard** for visualising transaction risks and fraud alerts | Full interactive Next.js 15 web UI — live transaction feed, Security Arena, Cache Visualizer, Legal Report, and 8-language audio alert |
 | 5 | Create **real-time monitoring** systems for immediate threat detection | Rust Actix-Web gateway with lock-free `DashMap` consortium cache — P99 < 5 ms verdict; async graph analysis off the hot path |
 
 ---
@@ -72,8 +72,8 @@ External UPI Client
                                 ▼
                     ┌──────────────────────────┐
                     │  Layer 5 — Dashboard     │
-                    │  Streamlit (local demo)  │
-                    │  Next.js 15 (web UI)     │
+                    │  Next.js 15 /live        │
+                    │  (production web UI)     │
                     └──────────────────────────┘
 ```
 
@@ -96,7 +96,7 @@ All five official Blue Team objectives from the problem statement are addressed:
 | Anomaly Detection | IsolationForest (`services/local_engine/train_ensemble.py`) |
 | Ensemble Methods | RandomForest (300 estimators) fused with IsolationForest scores |
 | SMOTE for imbalanced data | `imblearn.over_sampling.SMOTE` on training split only — test set always reflects real distribution |
-| User-friendly Dashboard | Streamlit (`services/demo/app.py`) + full interactive Next.js web UI |
+| User-friendly Dashboard | Next.js 15 web UI — live transaction feed, Security Arena, Cache Visualizer, Legal Report |
 | Real-Time Monitoring | Rust DashMap cache — sub-5 ms lookups, async graph updates off the hot path |
 | Accessibility | Pre-generated Neural TTS (edge-tts, 8 Indian languages) — works offline, no API key |
 | Privacy | SHA-256 VPA hashing — raw PII never stored or transmitted |
@@ -137,9 +137,6 @@ python services/agents/agent03_accessible_alert.py
 
 ### 6. Launch the dashboard (Layer 5)
 ```powershell
-# Streamlit (local introspection)
-streamlit run services/demo/app.py
-
 # Next.js web UI (dev server)
 cd frontend && npm install && npm run dev
 # → http://localhost:3000
@@ -208,7 +205,7 @@ varaksha/
 │   ├── agents/
 │   │   └── agent03_accessible_alert.py  ← Layer 4: LLM + NMT + pre-gen TTS MP3s
 │   └── demo/
-│       └── app.py                  ← Layer 4+5: Streamlit analyst dashboard (local)
+│       └── app.py                  ← Layer 5: demo support script
 │
 ├── data/
 │   ├── models/                     ← ONNX artefacts (committed)

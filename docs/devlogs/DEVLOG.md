@@ -736,12 +736,45 @@ All four leakage bugs have been corrected in `train_ensemble.py`. Models retrain
 
 ---
 
+### Phase 12 — Remove Streamlit from Active Stack References
+
+**Date:** March 12, 2026  
+**Commit:** pending  
+**Files:** `README.md`, `docs/devlogs/current_state.md`, `docs/devlogs/DEVLOG.md`
+
+#### Context
+
+`services/demo/app.py` was built in Phase 5 as an early Streamlit dashboard. It was superseded in Phase 7 when the Next.js frontend with the `/live` route (SecurityArena, CacheVisualizer, LegalReport) became the production Layer 5. Streamlit was never added to `requirements.txt`, confirming it is not part of the active declared stack. All documentation still referenced it as an active layer — now corrected.
+
+#### Changes
+
+**`README.md`** (5 locations):
+- Objectives table row 4: removed "Streamlit dashboard (`services/demo/app.py`)" prefix; kept Next.js description
+- Architecture ASCII diagram Layer 5 box: removed `Streamlit (local demo)` line; kept only `Next.js 15 /live`
+- Hackathon compliance table "User-friendly Dashboard": replaced Streamlit reference with Next.js /live description
+- Quick Start step 6: removed `streamlit run services/demo/app.py` block entirely
+- Directory map `app.py` label: updated to "demo support script" (no longer asserts it as a Layer)
+
+**`docs/devlogs/current_state.md`** (6 locations):
+- TOC link: updated from L5 Streamlit to L5 Next.js /live
+- Architecture ASCII diagram: replaced Streamlit box with Next.js /live box
+- Interface contracts: removed `L5 → L1` row (no longer applies)
+- L5 layer spec section: replaced Streamlit spec with Next.js `/live` spec (files, features, deploy)
+- Directory map `app.py` label: marked as deprecated local demo
+- Run Commands: removed `streamlit run services/demo/app.py` block
+
+**`docs/devlogs/DEVLOG.md`** Honest Caveats:
+- Updated the Rust cache caveat to reference Next.js `/live` instead of "the demo Streamlit dashboard"
+- Historical Phase 5–7 Streamlit entries preserved as accurate build history
+
+---
+
 ## Honest Caveats
 
 **The Rust cache is a stub.** Until the teammate fills in `RiskCache::get()` and
-`upsert()`, every transaction scores 0.0 and returns `ALLOW`. The demo Streamlit
-dashboard bypasses the gateway and generates scores directly in Python — it
-does not depend on the Rust server being fully implemented.
+`upsert()`, every transaction scores 0.0 and returns `ALLOW`. The Next.js `/live`
+dashboard simulates scores client-side for the demo — it does not depend on the
+Rust server being fully implemented.
 
 **googletrans is unofficial.** The Google Translate Python wrapper reverse-engineers
 the public translation endpoint. It has no SLA and can break on API changes.

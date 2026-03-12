@@ -19,7 +19,7 @@
   - [L2 — Rust Privacy Gateway](#l2--rust-privacy-gateway-gateway)
   - [L3 — Graph Mule Detector](#l3--graph-mule-detector-servicesgraph)
   - [L4 — Multilingual Alert Agent](#l4--multilingual-alert-agent-servicesagents)
-  - [L5 — Streamlit Demo Dashboard](#l5--streamlit-demo-dashboard-servicesdemo)
+  - [L5 — Next.js /live Dashboard](#l5--nextjs-live-dashboard-frontendapplive)
 - [Frontend](#frontend-frontend)
 - [Datasets](#datasets)
 - [Model Artefacts](#model-artefacts)
@@ -92,9 +92,9 @@ UPI Client
 └─────────────────────────────────────┘
 
 ┌─────────────────────────────────────┐
-│  L5 — Streamlit Demo Dashboard      │  ← analyst / judge demo only
-│  Live verdict feed · Plotly graph   │
-│  Hindi alert panel · audit log      │
+│  L5 — Next.js /live Dashboard     │
+│  Real-time feed · SecurityArena   │
+│  CacheVisualizer · LegalReport    │
 └─────────────────────────────────────┘
 
 ┌─────────────────────────────────────┐
@@ -111,7 +111,6 @@ UPI Client
 | UPI Client → L2 | HTTP POST `/v1/tx` | None (internal network) |
 | L3 → L2 cache | HTTP POST `/v1/webhook/update_cache` | HMAC-SHA256 signature |
 | L2 → L1 | Direct Python import (same process) | — |
-| L5 → L1 | Direct Python import | — |
 | L4 → L5 | Python function call / `AlertResult` dataclass | — |
 
 ---
@@ -194,15 +193,14 @@ UPI Client
 
 ---
 
-### L5 — Streamlit Demo Dashboard (`services/demo/`)
+### L5 — Next.js /live Dashboard (`frontend/app/live/`)
 
 | Item | Detail |
 |---|---|
-| **File** | `app.py` |
-| **Purpose** | Analyst / judge demo — not production |
-| **Features** | ALLOW/FLAG/BLOCK live verdict feed · Plotly Scattergl force-directed graph · Hindi alert panel · 50-event audit log |
-| **Data** | Synthetic VPAs from seeded RNG — no real PII processed |
-| **Run command** | `streamlit run services/demo/app.py` |
+| **Files** | `page.tsx`, `SecurityArena.tsx`, `CacheVisualizer.tsx`, `LegalReport.tsx` |
+| **Purpose** | Production dashboard — real-time transaction feed, threat classification, cache state, legal citations |
+| **Features** | Live ALLOW/FLAG/BLOCK feed · SecurityArena threat panel · CacheVisualizer DashMap state · LegalReport per-transaction citations |
+| **Deploy** | Cloudflare Pages (global CDN) |
 
 ---
 
@@ -377,7 +375,7 @@ Varaksha/
 │   ├── agents/
 │   │   └── agent03_accessible_alert.py  ← L4: edge-tts multilingual alerts
 │   └── demo/
-│       └── app.py            ← L5: Streamlit analyst dashboard
+│       └── app.py            ← deprecated local demo (superseded by Next.js /live)
 │
 └── frontend/                 ← Next.js 15 static web UI
     ├── app/
@@ -418,10 +416,6 @@ python services/graph/graph_agent.py
 
 # ── Alert agent (smoke test) ──────────────────────────────────────────────
 python services/agents/agent03_accessible_alert.py
-
-# ── Streamlit demo ────────────────────────────────────────────────────────
-streamlit run services/demo/app.py
-# → http://localhost:8501
 
 # ── Frontend (dev) ────────────────────────────────────────────────────────
 cd frontend && npm install && npm run dev
