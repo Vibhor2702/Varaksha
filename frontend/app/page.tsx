@@ -285,11 +285,8 @@ export default function PitchPage() {
                 The Challenge
               </p>
               <p className="font-barlow text-[0.92rem] text-ink/68 leading-[1.75]">
-                Every UPI transaction settles in under{"{"} " "{"}"}
-                <strong className="font-semibold text-ink">
-                  15 seconds
-                </strong>
-                . If your fraud model sits on that critical path &mdash; between the
+                Every UPI transaction settles in under <strong className="font-semibold text-ink">15 seconds</strong>.
+                If your fraud model sits on that critical path &mdash; between the
                 user and their bank &mdash; one slow inference call can stall payments
                 for millions of people. That&rsquo;s the tradeoff every legacy
                 system forces you to accept.
