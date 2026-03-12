@@ -16,4 +16,6 @@ env_logger  = "0.11"
 uuid        = { version = "1", features = ["v4"] }
 reqwest     = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
+dashmap    = "5"
+
 risk-cache = { path = "../risk-cache" }

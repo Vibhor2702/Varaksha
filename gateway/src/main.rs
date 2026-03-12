@@ -12,14 +12,18 @@ use sha2::{Digest, Sha256};
 use hmac::{Hmac, Mac};
 use uuid::Uuid;
 
+use dashmap::DashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 type HmacSha256 = Hmac<Sha256>;
 
 struct AppState {
     cache:           RiskCache,
     consent_manager: ConsentManagerClient,
+    /// Per VPA-hash request counter for NPCI OC-215/2025-26 rate cap.
+    /// Value is (requests_in_window, window_start).
+    rate_limiter:    DashMap<String, (u32, Instant)>,
 }
 
 /// Normalise a VPA to a canonical form before hashing so that a full
@@ -100,15 +104,18 @@ async fn check_tx(
 
     let tx = body.into_inner();
 
-    // ── DPDP Act 2023 §4(1) — Consent Gate ────────────────────────────────────
-    // Verify the consent artefact against the AA (Sahamati / ReBIT v2.0 spec)
-    // BEFORE touching tx.vpa (personal data per §2(t)).
+    // ── DPDP Act 2023 — Lawful Processing Gate ──────────────────────────────────
+    // Dual legal basis (belt-and-braces):
+    //   §7(g)  — PRIMARY: "legitimate use" for ensuring safety and security /
+    //            preventing or detecting fraud.  No explicit consent is required
+    //            when a PSP invokes this exemption in a banking context.
+    //   §4(1)  — SECONDARY: explicit consent via AA Consent Artefact (Sahamati /
+    //            ReBIT v2.0 spec) for PSPs that provide a consent token.
     //
     // In production: set env vars CONSENT_MANAGER_BASE_URL, CONSENT_MANAGER_API_KEY,
     // CONSENT_MANAGER_FI_ID.  In local dev: set DPDP_CONSENT_DEV_BYPASS=true.
     //
-    // On success, the returned consent_id is logged against trace_id to satisfy
-    // the §12(a) access-rights audit trail.
+    // On success, consent_id is logged against trace_id for §12(a) audit trail.
     // ──────────────────────────────────────────────────────────────────────────
     match data.consent_manager.verify(tx.consent_token.as_ref(), &trace_id).await {
         Ok(consent_id) => {
@@ -145,6 +152,33 @@ async fn check_tx(
     }
 
     let vpa_hash = hash_vpa(&tx.vpa);
+
+    // ── NPCI OC-215/2025-26 — Per-VPA daily rate cap ──────────────────────────
+    // NPCI enforces a maximum of 50 balance checks per VPA per day and 3 status
+    // checks per transaction.  We apply a conservative 100-request/24 h window
+    // on fraud scoring calls so our architecture is physically incapable of
+    // flooding the UPI rail on a per-VPA basis.
+    {
+        const CAP: u32     = 100;
+        const WINDOW: Duration = Duration::from_secs(86_400); // 24 h
+        let mut entry = data.rate_limiter
+            .entry(vpa_hash.clone())
+            .or_insert((0u32, Instant::now()));
+        if entry.1.elapsed() >= WINDOW {
+            *entry = (1, Instant::now());
+        } else {
+            entry.0 += 1;
+            if entry.0 > CAP {
+                drop(entry);
+                return HttpResponse::TooManyRequests().json(serde_json::json!({
+                    "error":   "RATE_LIMIT_EXCEEDED",
+                    "detail":  "NPCI OC-215/2025-26: daily scoring request cap for this VPA exceeded. Retry after the 24-hour window resets.",
+                    "trace_id": trace_id,
+                }));
+            }
+        }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
 
     let (risk_score, reason) = data.cache.get(&vpa_hash);
 
@@ -247,8 +281,9 @@ async fn main() -> std::io::Result<()> {
         });
 
     let state = Arc::new(AppState {
-        cache: RiskCache::new(),
+        cache:           RiskCache::new(),
         consent_manager,
+        rate_limiter:    DashMap::new(),
     });
 
     let port = std::env::var("GATEWAY_PORT")

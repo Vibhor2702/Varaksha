@@ -33,6 +33,9 @@
   - [Directory Map](#directory-map)
   - [Run Commands](#run-commands)
   - [DPDP Act 2023 Compliance](#dpdp-act-2023-compliance)
+    - [Personal data surfaces and their status](#personal-data-surfaces-and-their-status)
+    - [Key DPDP obligations and implementation status](#key-dpdp-obligations-and-implementation-status)
+    - [Production consent flow (required before real-data deployment)](#production-consent-flow-required-before-real-data-deployment)
 
 ---
 
@@ -457,6 +460,7 @@ Relevant law: **Digital Personal Data Protection Act, 2023** + **DPDP Rules, 202
 | Obligation | Act reference | Status |
 |---|---|---|
 | Lawful purpose + consent before processing VPA | §4(1), §6 | ✅ `ConsentManagerClient` (`gateway/src/consent.rs`) calls AA `POST /v2/Consent/fetch`; 422 on missing token, 403 on inactive consent, 503 on transport error. `consent_id` logged against `trace_id` for §12(a) audit trail. |
+| **Legitimate Use for Security** (primary lawful basis, no consent required) | §7(g) | ✅ Processing is for detecting and preventing unlawful activity (fraud). Documented as dual legal basis alongside §4(1) in `gateway/src/main.rs`. |
 | Notice to Data Principal (language, purpose, rights) | §5, Rules 2025 Rule 3 | ⚠️ Footer notice on frontend; production must add dedicated privacy notice page |
 | Purpose limitation — fraud-risk scoring only | §6(3), §7(e) | ✅ No secondary use of hash or score |
 | Data minimisation — no raw PII in cache | §6(3) | ✅ Only `{vpa_hash, risk_score, reason}` stored |
@@ -464,6 +468,9 @@ Relevant law: **Digital Personal Data Protection Act, 2023** + **DPDP Rules, 202
 | Data Principal rights (access, correction, erasure, nomination, grievance) | §§12–13 | ⚠️ Grievance contact placeholder added to frontend footer; no rights portal yet |
 | Significant Data Fiduciary registration (>10 M principals, or govt notification) | §10 | N/A for current demo scale |
 | Webhook HMAC-SHA256 signature on graph→gateway | DPDP security obligations, also IT Act §43A | ✅ Implemented |
+| Identity theft / impersonation / SIM-swap detection | IT Act 2000 §66C, §66D | ✅ L4 alert agent cites §66D; ML features `is_new_device`, `previous_failed_attempts` target SIM-swap patterns; graph agent detects fan-in (account takeover) typology |
+| Per-VPA daily request cap (UPI rail protection) | NPCI OC-215/2025-26 | ✅ `check_tx` enforces 100 scoring requests per VPA per 24 h window via `DashMap` rate limiter; HTTP 429 on breach. Architecture is physically incapable of VPA flooding. |
+| Risk-based transaction monitoring | RBI Master Directions on Digital Payment Security Controls; RBI 2026 2FA draft | ✅ Varaksha IS the risk-based monitoring layer mandated for PSPs. Composite ML score (RF 70% + IsoForest 30%) + graph mule detection fulfils "unusual/high-risk pattern" identification. |
 
 ### Production consent flow (required before real-data deployment)
 

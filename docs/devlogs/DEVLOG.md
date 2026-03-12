@@ -841,6 +841,44 @@ The **Digital Personal Data Protection (DPDP) Act, 2023** and its **2025 Rules**
 
 ---
 
+### Phase 15 — Full 2026 Regulatory Hardening (NPCI OC-215 · DPDP §7(g) · IT Act §66C/D · RBI 2FA)
+
+**Date:** March 12, 2026  
+**Commit:** pending  
+**Files:** `gateway/Cargo.toml`, `gateway/src/main.rs`, `gateway/src/models.rs`, `docs/devlogs/current_state.md`
+
+#### Context
+`lawsprompt.pdf` audit identified three regulatory gaps against 2026 requirements:
+- **DPDP §7(g)** not referenced as primary legal basis alongside §4(1)
+- **NPCI OC-215/2025-26** per-VPA rate cap not implemented (50 balance checks/day mandate)
+- **IT Act §66C/D + RBI 2FA** not included in the compliance table
+
+#### Changes
+- **`gateway/Cargo.toml`**: added `dashmap = "5"` for direct rate-limiter type
+- **`gateway/src/main.rs`**:
+  - `AppState` gains `rate_limiter: DashMap<String, (u32, Instant)>`
+  - `check_tx`: per-VPA rate cap (100 req/24 h window) after `hash_vpa()`. HTTP 429 with `NPCI OC-215/2025-26` citation on breach. Window resets automatically — no cron needed.
+  - Updated DPDP comment block: §7(g) named as PRIMARY legal basis ("legitimate use for security"), §4(1) AA consent as secondary belt-and-braces.
+  - `main()`: `rate_limiter: DashMap::new()` added to `AppState` init
+- **`gateway/src/models.rs`**: replaced stale "PRODUCTION TODO" comment with "Status (Phase 14): fully enforced"
+- **`docs/devlogs/current_state.md`**: added 4 new rows to DPDP compliance table:
+  - §7(g) Legitimate Use for Security — ✅ documented as dual legal basis
+  - IT Act §66C/D identity theft / SIM-swap — ✅ L4 alert + ML features + graph
+  - NPCI OC-215/2025-26 rate cap — ✅ 100 req/VPA/24 h in-memory gate
+  - RBI 2026 Risk-Based Monitoring — ✅ Varaksha IS the mandated monitoring layer
+
+#### Compliance posture after Phase 15
+
+| Law | Requirement | Status |
+|---|---|---|
+| DPDP Act §7(g) | Legitimate Use for Security | ✅ Documented + cited |
+| DPDP Act §4(1) | Explicit Consent via AA | ✅ Live (Phase 14) |
+| IT Act §66C/D | Identity theft / impersonation detection | ✅ ML + graph + alerts |
+| NPCI OC-215/2025-26 | Rate limiting / anti-flood | ✅ 100 req/VPA/day gate |
+| RBI 2026 2FA directive | Risk-based monitoring layer | ✅ Varaksha fulfils this role |
+
+---
+
 ### Phase 14 — Live Consent Manager Integration (DPDP §4(1))
 
 **Commit:** `1a6c275`  

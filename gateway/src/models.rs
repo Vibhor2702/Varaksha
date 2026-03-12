@@ -127,11 +127,10 @@ use serde::{Deserialize, Serialize};
 ///   3. Limited the purpose to fraud prevention (§7(e)) or the specific purpose
 ///      stated in the consent notice — purpose limitation applies under §6(3).
 ///
-/// **PRODUCTION TODO**: The `check_tx` handler MUST:
-///   a. Reject the request with HTTP 422 if `consent_token` is absent or empty.
-///   b. Call the Consent Manager SDk to verify the token is valid, unexpired, and
-///      covers the "fraud-risk-check" purpose before hashing or processing `vpa`.
-///   c. Log the consent artefact ID alongside the trace_id for audit purposes.
+/// **Status (Phase 14)**: `check_tx` fully enforces all three points above via
+///   `ConsentManagerClient::verify()` (see `gateway/src/consent.rs`).
+///   HTTP 422 on missing token · 403 on inactive consent · 503 on CM transport error.
+///   `consent_id` is logged against `trace_id` for §12(a) access-rights audit trail.
 ///
 /// Failure to do so constitutes unlawful processing under §4(1) and may attract
 /// a penalty of up to ₹250 crore under Schedule 1 of the Act.
