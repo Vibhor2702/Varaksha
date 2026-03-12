@@ -157,15 +157,6 @@ const MILESTONES: Milestone[] = [
     owner: "both",
     Icon:  Rocket,
   },
-  {
-    date:  "Mar 12",
-    title: "Target Leakage Audit",
-    quote: "A ROC-AUC of 0.9952 on tabular data is a warning, not a cause for celebration.",
-    body:  "Code review found four target-leakage bugs: is_new_device directly copied fraud labels in three loaders (60K rows), and merchant_category encoded fraud_type. All fixed and retrained. Final scores: RF Accuracy 85.24%, ROC-AUC 0.9546, Recall 0.9229.",
-    tags:  ["Target Leakage", "4 Bugs Fixed", "RF 85.24%"],
-    owner: "ml",
-    Icon:  SearchCode,
-  },
 ];
 
 // ── Storyboard data ──────────────────────────────────────────────────────────
