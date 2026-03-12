@@ -1,5 +1,6 @@
 mod models;
 mod consent;
+mod dpr;
 
 use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 
@@ -24,6 +25,10 @@ struct AppState {
     /// Per VPA-hash request counter for NPCI OC-215/2025-26 rate cap.
     /// Value is (requests_in_window, window_start).
     rate_limiter:    DashMap<String, (u32, Instant)>,
+    /// DPDP §12(b) correction grievances — keyed by grievance_id.
+    grievances:      DashMap<String, dpr::GrievanceRecord>,
+    /// DPDP §12(d) nominations — keyed by VPA hash.
+    nominations:     DashMap<String, dpr::NomineeRecord>,
 }
 
 /// Normalise a VPA to a canonical form before hashing so that a full
@@ -284,6 +289,8 @@ async fn main() -> std::io::Result<()> {
         cache:           RiskCache::new(),
         consent_manager,
         rate_limiter:    DashMap::new(),
+        grievances:      DashMap::new(),
+        nominations:     DashMap::new(),
     });
 
     let port = std::env::var("GATEWAY_PORT")
@@ -297,6 +304,10 @@ async fn main() -> std::io::Result<()> {
             .service(health)
             .service(check_tx)
             .service(update_cache)
+            .service(dpr::dpr_access)
+            .service(dpr::dpr_correction)
+            .service(dpr::dpr_erasure)
+            .service(dpr::dpr_nomination)
     })
     .bind(("0.0.0.0", port))?
     .run()

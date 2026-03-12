@@ -79,6 +79,12 @@ impl RiskCache {
         );
     }
 
+    /// Remove a VPA hash from the cache entirely (DPDP §12(b) erasure right).
+    /// Returns `true` if an entry existed and was removed.
+    pub fn remove(&self, vpa_hash: &str) -> bool {
+        self.inner.remove(vpa_hash).is_some()
+    }
+
     pub fn len(&self) -> usize {
         self.inner.len()
     }
