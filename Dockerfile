@@ -1,5 +1,5 @@
 # -- Stage 1: Rust build -------------------------------------------------------
-FROM rust:1.75-slim as rust-builder
+FROM rust:1-slim as rust-builder
 WORKDIR /app
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 COPY Cargo.toml Cargo.lock* ./
@@ -13,8 +13,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir fastapi uvicorn numpy onnxruntime
 
 COPY --from=rust-builder /app/target/release/varaksha-gateway ./varaksha-gateway
 COPY services/local_engine/ ./services/local_engine/
