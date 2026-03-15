@@ -12,7 +12,7 @@ import { LegalReport     } from "./LegalReport";
 
 const FEED_INTERVAL_MS  = 2200;   // New transaction injected to feed every N ms
 const FEED_MAX_ROWS     = 60;     // Max rows before old ones are pruned
-const API_BASE          = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7860";
+const API_BASE          = process.env.NEXT_PUBLIC_API_URL || "https://varaksha-api.up.railway.app";
 let streamSeq           = 1;
 
 // ── Synthetic data pools ──────────────────────────────────────────────────────
@@ -648,46 +648,69 @@ function TransactionFeed() {
   }, []);
 
   useEffect(() => {
-    const es = new EventSource(`${API_BASE}/v1/stream`);
+    let es: EventSource | null = null;
 
-    es.onmessage = (e) => {
-      if (pausedRef.current) return;
-      try {
-        const tx: StreamTx = JSON.parse(e.data);
-        const row: FeedRow = {
-          id: streamSeq++,
-          ts: tx.time,
-          sender: tx.sender,
-          receiver: tx.receiver,
-          amount: tx.amount,
-          merchantCat: tx.category,
-          verdict: tx.verdict,
-          riskScore: Number(tx.risk),
-          latencyMs: 4,
-        };
+    function connectStream() {
+      if (es) return;
 
-        setRows((prev) => {
-          const next = [row, ...prev];
-          return next.length > FEED_MAX_ROWS ? next.slice(0, FEED_MAX_ROWS) : next;
-        });
+      es = new EventSource(`${API_BASE}/v1/stream`);
 
-        setStats((s) => ({
-          allow: s.allow + (row.verdict === "ALLOW" ? 1 : 0),
-          flag:  s.flag  + (row.verdict === "FLAG"  ? 1 : 0),
-          block: s.block + (row.verdict === "BLOCK" ? 1 : 0),
-          total: s.total + 1,
-        }));
-      } catch {
-        // ignore malformed events
+      es.onmessage = (e) => {
+        if (pausedRef.current) return;
+        try {
+          const tx: StreamTx = JSON.parse(e.data);
+          const row: FeedRow = {
+            id: streamSeq++,
+            ts: tx.time,
+            sender: tx.sender,
+            receiver: tx.receiver,
+            amount: tx.amount,
+            merchantCat: tx.category,
+            verdict: tx.verdict,
+            riskScore: Number(tx.risk),
+            latencyMs: 4,
+          };
+
+          setRows((prev) => {
+            const next = [row, ...prev];
+            return next.length > FEED_MAX_ROWS ? next.slice(0, FEED_MAX_ROWS) : next;
+          });
+
+          setStats((s) => ({
+            allow: s.allow + (row.verdict === "ALLOW" ? 1 : 0),
+            flag:  s.flag  + (row.verdict === "FLAG"  ? 1 : 0),
+            block: s.block + (row.verdict === "BLOCK" ? 1 : 0),
+            total: s.total + 1,
+          }));
+        } catch {
+          // ignore malformed events
+        }
+      };
+
+      es.onerror = () => {
+        setUsingFallback(true);
+        es?.close();
+        es = null;
+      };
+    }
+
+    connectStream();
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        es?.close();
+        es = null;
+      } else {
+        connectStream();
       }
     };
 
-    es.onerror = () => {
-      setUsingFallback(true);
-      es.close();
-    };
+    document.addEventListener("visibilitychange", handleVisibility);
 
-    return () => es.close();
+    return () => {
+      es?.close();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   useEffect(() => {

@@ -10,6 +10,7 @@ use reqwest::Client;
 use risk_cache::RiskCache;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
@@ -24,6 +25,17 @@ struct AppState {
     rate_limiter: DashMap<String, (u32, Instant)>,
     http_client: Client,
     sidecar_url: String,
+    active_streams: AtomicUsize,
+}
+
+struct StreamConnGuard {
+    state: Arc<AppState>,
+}
+
+impl Drop for StreamConnGuard {
+    fn drop(&mut self) {
+        self.state.active_streams.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -279,7 +291,17 @@ async fn list_cache(data: web::Data<Arc<AppState>>) -> impl Responder {
 async fn stream_tx(data: web::Data<Arc<AppState>>) -> impl Responder {
     let state = Arc::clone(data.get_ref());
 
+    let current = state.active_streams.fetch_add(1, Ordering::SeqCst);
+    if current >= 10 {
+        state.active_streams.fetch_sub(1, Ordering::SeqCst);
+        return HttpResponse::ServiceUnavailable().json(serde_json::json!({
+            "error": "stream capacity reached, try again shortly"
+        }));
+    }
+
     let event_stream = stream! {
+        let _guard = StreamConnGuard { state: Arc::clone(&state) };
+        let stream_started = Instant::now();
         let senders = [
             "ravi.kumar@axisbank",
             "priya.sharma@okicici",
@@ -299,6 +321,10 @@ async fn stream_tx(data: web::Data<Arc<AppState>>) -> impl Responder {
         let cats = ["FOOD", "UTILITY", "TRAVEL", "P2P", "ECOM", "GAMBLING"];
 
         loop {
+            if stream_started.elapsed() >= Duration::from_secs(300) {
+                break;
+            }
+
             let mut rng = rand::thread_rng();
             let tx = TxRequest {
                 vpa: senders[rng.gen_range(0..senders.len())].to_string(),
@@ -421,12 +447,13 @@ async fn main() -> std::io::Result<()> {
         http_client: Client::new(),
         sidecar_url: std::env::var("SIDECAR_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:8001/score".to_string()),
+        active_streams: AtomicUsize::new(0),
     });
 
     let port: u16 = std::env::var("PORT")
-        .unwrap_or_else(|_| "7860".to_string())
+        .unwrap_or_else(|_| "8082".to_string())
         .parse()
-        .unwrap_or(7860);
+        .unwrap_or(8082);
     let bind_addr = format!("0.0.0.0:{}", port);
 
     HttpServer::new(move || {
