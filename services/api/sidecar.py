@@ -38,28 +38,36 @@ def health() -> dict[str, str]:
 @app.post("/score")
 def score(body: ScoreRequest) -> dict[str, object]:
     try:
-        x = np.array([[[
-            float(body.merchant_category),
-            float(body.transaction_type),
-            float(body.device_type),
-            float(body.amount),
-            float(body.hour_of_day),
-            float(body.day_of_week),
-            float(body.transactions_last_1h),
-            float(body.transactions_last_24h),
-            float(body.amount_zscore),
-            float(body.gps_delta_km),
-            float(body.is_new_device),
-            float(body.is_new_merchant),
-            float(body.balance_drain_ratio),
-            float(body.account_age_days),
-            float(body.previous_failed_attempts),
-            float(body.transfer_cashout_flag),
-        ]], dtype=np.float32)
+        x = np.array([
+            [
+                float(body.merchant_category),
+                float(body.transaction_type),
+                float(body.device_type),
+                float(body.amount),
+                float(body.hour_of_day),
+                float(body.day_of_week),
+                float(body.transactions_last_1h),
+                float(body.transactions_last_24h),
+                float(body.amount_zscore),
+                float(body.gps_delta_km),
+                float(body.is_new_device),
+                float(body.is_new_merchant),
+                float(body.balance_drain_ratio),
+                float(body.account_age_days),
+                float(body.previous_failed_attempts),
+                float(body.transfer_cashout_flag),
+            ]
+        ], dtype=np.float32)
 
         # Use the real ONNX sessions from infer.py.
         rf_out = engine._rf_sess.run(None, {"X": x})  # pylint: disable=protected-access
-        rf_prob = float(rf_out[1][0][1])
+        out1 = np.array(rf_out[1]) if len(rf_out) > 1 else np.array(rf_out[0])
+        if out1.ndim == 2 and out1.shape[1] == 2:
+            rf_prob = float(out1[0][1])
+        elif out1.ndim == 1:
+            rf_prob = float(out1[0])
+        else:
+            rf_prob = float(np.mean(out1))
 
         iso_score = 0.0
         if engine._iso_sess is not None:  # pylint: disable=protected-access
@@ -67,10 +75,6 @@ def score(body: ScoreRequest) -> dict[str, object]:
             iso_score = float(iso_out[1].flat[0])
         else:
             iso_out = None
-
-        import logging
-        logging.warning("RF raw output: %s", rf_out)
-        logging.warning("ISO raw output: %s", iso_out if engine._iso_sess else "none")
 
         iso_norm = max(0.0, min(1.0, (iso_score + 1.0) / 2.0))
         risk_score = max(0.0, min(1.0, (rf_prob * 0.7) + (iso_norm * 0.3)))
