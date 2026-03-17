@@ -144,8 +144,6 @@ class VarakshaScoringEngine:
             anomaly_score = 0.0
 
         # Blend: if IF scores very anomalous, bump fraud_proba floor
-        if anomaly_score < -0.15:
-            fraud_proba = max(fraud_proba, 0.45)
 
         verdict, reason = self._verdict(fraud_proba, anomaly_score, tx)
         return ScoreResult(
