@@ -94,3 +94,24 @@ def debug_models():
         }
         for name, path in models.items()
     }
+
+
+@app.get("/debug/score")
+def debug_score():
+    import numpy as np
+    engine = get_engine()  # however the engine is accessed globally
+
+    low_risk  = np.array([[1,1,0,40.0,14,2,1,3,0.1,0.0,0,0,0.01,365,0,0]],
+                          dtype=np.float32)
+    high_risk = np.array([[2,1,2,99999.0,3,1,8,15,3.2,0.0,1,0,0.95,2,3,1]],
+                          dtype=np.float32)
+
+    rf_low  = engine._rf_sess.run(None,  {"X": low_risk})
+    rf_high = engine._rf_sess.run(None,  {"X": high_risk})
+    if_low  = engine._iso_sess.run(None,  {"X": low_risk}) if engine._iso_sess else None
+    if_high = engine._iso_sess.run(None,  {"X": high_risk}) if engine._iso_sess else None
+
+    return {
+        "low_risk":  {"rf_output": str(rf_low),  "if_output": str(if_low)},
+        "high_risk": {"rf_output": str(rf_high), "if_output": str(if_high)}
+    }
