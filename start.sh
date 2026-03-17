@@ -2,7 +2,10 @@
 set -e
 
 echo "[start.sh] Launching Python scoring sidecar on 127.0.0.1:8001..."
-uvicorn services.api.sidecar:app --host 127.0.0.1 --port 8001 &
+uvicorn services.api.sidecar:app \
+  --host 127.0.0.1 \
+  --port 8001 \
+  --log-level debug 2>&1 | tee /tmp/sidecar.log &
 SIDECAR_PID=$!
 
 echo "[start.sh] Waiting for sidecar to be ready..."

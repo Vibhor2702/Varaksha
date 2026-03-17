@@ -13,7 +13,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir fastapi uvicorn numpy onnxruntime
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --from=rust-builder /app/target/release/varaksha-gateway ./varaksha-gateway
 COPY services/local_engine/ ./services/local_engine/

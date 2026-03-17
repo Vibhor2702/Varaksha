@@ -240,6 +240,7 @@ async fn check_tx(data: web::Data<Arc<AppState>>, body: web::Json<TxRequest>) ->
                 data.cache.upsert(vpa_hash.clone(), s, r, 300);
             }
             Err(e) => {
+                log::error!("Sidecar call failed, using fallback score: {}", risk_score);
                 return HttpResponse::ServiceUnavailable().json(serde_json::json!({
                     "error": "SIDECAR_UNAVAILABLE",
                     "detail": e,
