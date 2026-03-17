@@ -38,7 +38,7 @@ def health() -> dict[str, str]:
 @app.post("/score")
 def score(body: ScoreRequest) -> dict[str, object]:
     try:
-        x = np.array([[
+        x = np.array([[[
             float(body.merchant_category),
             float(body.transaction_type),
             float(body.device_type),
@@ -65,6 +65,12 @@ def score(body: ScoreRequest) -> dict[str, object]:
         if engine._iso_sess is not None:  # pylint: disable=protected-access
             iso_out = engine._iso_sess.run(None, {"X": x})  # pylint: disable=protected-access
             iso_score = float(iso_out[1].flat[0])
+        else:
+            iso_out = None
+
+        import logging
+        logging.warning("RF raw output: %s", rf_out)
+        logging.warning("ISO raw output: %s", iso_out if engine._iso_sess else "none")
 
         iso_norm = max(0.0, min(1.0, (iso_score + 1.0) / 2.0))
         risk_score = max(0.0, min(1.0, (rf_prob * 0.7) + (iso_norm * 0.3)))
@@ -98,20 +104,23 @@ def debug_models():
 
 @app.get("/debug/score")
 def debug_score():
-    import numpy as np
-    engine = get_engine()  # however the engine is accessed globally
+    low_risk  = np.array([[1,1,0,40.0,14,2,1,3,0.1,0.0,0,0,0.01,365,0,0]], dtype=np.float32)
+    high_risk = np.array([[2,1,2,99999.0,3,1,8,15,3.2,0.0,1,0,0.95,2,3,1]], dtype=np.float32)
 
-    low_risk  = np.array([[1,1,0,40.0,14,2,1,3,0.1,0.0,0,0,0.01,365,0,0]],
-                          dtype=np.float32)
-    high_risk = np.array([[2,1,2,99999.0,3,1,8,15,3.2,0.0,1,0,0.95,2,3,1]],
-                          dtype=np.float32)
-
-    rf_low  = engine._rf_sess.run(None,  {"X": low_risk})
-    rf_high = engine._rf_sess.run(None,  {"X": high_risk})
-    if_low  = engine._iso_sess.run(None,  {"X": low_risk}) if engine._iso_sess else None
-    if_high = engine._iso_sess.run(None,  {"X": high_risk}) if engine._iso_sess else None
+    rf_low   = engine._rf_sess.run(None, {"X": low_risk})
+    rf_high  = engine._rf_sess.run(None, {"X": high_risk})
+    if_low   = engine._iso_sess.run(None, {"X": low_risk})  if engine._iso_sess else None
+    if_high  = engine._iso_sess.run(None, {"X": high_risk}) if engine._iso_sess else None
 
     return {
-        "low_risk":  {"rf_output": str(rf_low),  "if_output": str(if_low)},
-        "high_risk": {"rf_output": str(rf_high), "if_output": str(if_high)}
+        "low_risk":  {
+            "rf_output":  str(rf_low),
+            "if_output":  str(if_low),
+            "rf_prob_parsed": float(rf_low[1][0][1]),
+        },
+        "high_risk": {
+            "rf_output":  str(rf_high),
+            "if_output":  str(if_high),
+            "rf_prob_parsed": float(rf_high[1][0][1]),
+        },
     }
