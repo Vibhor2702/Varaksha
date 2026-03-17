@@ -75,3 +75,22 @@ def score(body: ScoreRequest) -> dict[str, object]:
         }
     except Exception as exc:  # pragma: no cover
         raise HTTPException(status_code=500, detail=f"sidecar inference failed: {exc}") from exc
+
+
+@app.get("/debug/models")
+def debug_models():
+    import pathlib
+
+    ROOT = pathlib.Path(__file__).resolve().parents[2]
+    models = {
+        "varaksha_rf_model.onnx": ROOT / "data/models/varaksha_rf_model.onnx",
+        "isolation_forest.onnx": ROOT / "data/models/isolation_forest.onnx",
+        "scaler.onnx": ROOT / "data/models/scaler.onnx",
+    }
+    return {
+        name: {
+            "exists": path.exists(),
+            "size_bytes": path.stat().st_size if path.exists() else 0,
+        }
+        for name, path in models.items()
+    }
