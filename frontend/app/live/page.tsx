@@ -226,9 +226,20 @@ function IntelSandbox() {
     setTimeout(async () => {
       try {
         const API_BASE = getApiBaseNormalized();
+        const amount = parseFloat(form.amount) || 0;
+        
+        // Calculate proper z-score: (value - mean) / std_dev
+        // Training statistics (from historical transaction data):
+        // mean amount: 3000 INR, std dev: 12000 INR
+        const AMOUNT_MEAN = 3000;
+        const AMOUNT_STD = 12000;
+        const amount_zscore_value = (amount - AMOUNT_MEAN) / AMOUNT_STD;
+        // Clamp to [-5, 5] for numerical stability (outliers beyond ±5σ)
+        const amount_zscore = Math.max(-5, Math.min(5, amount_zscore_value));
+        
         const payload = {
           vpa: form.senderVpa,
-          amount: parseFloat(form.amount) || 0,
+          amount: amount,
           merchant_category: mapMerchantCategory(form.merchantCat),
           transaction_type: "DEBIT",
           device_type: "ANDROID",
@@ -236,11 +247,11 @@ function IntelSandbox() {
           day_of_week: new Date().getDay(),
           transactions_last_1h: 1,
           transactions_last_24h: 3,
-          amount_zscore: Math.min(5, (parseFloat(form.amount) || 0) / 10000),
+          amount_zscore: amount_zscore,
           gps_delta_km: 0,
           is_new_device: form.newDevice,
           is_new_merchant: false,
-          balance_drain_ratio: Math.min(1, (parseFloat(form.amount) || 0) / 100000),
+          balance_drain_ratio: Math.min(1, amount / 100000),
           account_age_days: 365,
           previous_failed_attempts: form.newDevice ? 1 : 0,
           transfer_cashout_flag: 0,

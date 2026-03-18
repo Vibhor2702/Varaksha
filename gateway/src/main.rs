@@ -139,6 +139,37 @@ fn score_to_verdict(score: f32) -> Verdict {
     }
 }
 
+/// Adjust score based on transaction amount as a secondary validation layer
+/// This addresses cases where the model alone doesn't capture amount anomalies
+fn adjust_score_for_amount(raw_score: f32, amount: f32, category: &str) -> f32 {
+    // Amount thresholds (in INR) vary by merchant category
+    let (normal_high, suspicious_threshold, critical_threshold) = match category.to_uppercase().as_str() {
+        "GROCERY" | "FOOD" | "FUEL" => (2000.0, 10000.0, 50000.0),      // Small transactions normally
+        "ECOM" | "UTILITY" => (10000.0, 50000.0, 200000.0),            // Medium transactions
+        "TRAVEL" | "GAMBLING" => (15000.0, 100000.0, 500000.0),        // Higher baseline
+        "P2P" | "FINANCE" => (25000.0, 150000.0, 1000000.0),           // Variable transactions
+        _ => (10000.0, 50000.0, 200000.0),                             // Default
+    };
+
+    let adjusted = if amount <= normal_high {
+        // Small normal transaction — downweight the score
+        // If model says 0.45 (FLAG) for a ₹120 grocery, reduce to ~0.15 (ALLOW)
+        (raw_score * 0.3).min(0.35)
+    } else if amount <= suspicious_threshold {
+        // Moderate transaction — trust the model
+        raw_score
+    } else if amount <= critical_threshold {
+        // Large but not impossible — slightly upweight
+        (raw_score + 0.15).min(0.85)
+    } else {
+        // Extreme amount — significant boost
+        // ₹12M+ should hit at least FLAG (0.40), likely BLOCK (0.75+)
+        (raw_score + 0.35).min(1.0)
+    };
+
+    adjusted.max(0.0).min(1.0)
+}
+
 fn verdict_text(v: &Verdict) -> String {
     match v {
         Verdict::Allow => "ALLOW".to_string(),
@@ -237,10 +268,14 @@ async fn check_tx(data: web::Data<Arc<AppState>>, body: web::Json<TxRequest>) ->
             Ok((s, r)) => {
                 risk_score = s;
                 reason = r.clone();
-                data.cache.upsert(vpa_hash.clone(), s, r, 300);
+                
+                // Apply amount-based score adjustment for better discrimination
+                risk_score = adjust_score_for_amount(risk_score, tx.amount, &tx.merchant_category);
+                
+                data.cache.upsert(vpa_hash.clone(), risk_score, r, 300);
             }
             Err(e) => {
-                log::error!("Sidecar call failed, using fallback score: {}", risk_score);
+                log::error!("Sidecar call failed: {}", e);
                 return HttpResponse::ServiceUnavailable().json(serde_json::json!({
                     "error": "SIDECAR_UNAVAILABLE",
                     "detail": e,
