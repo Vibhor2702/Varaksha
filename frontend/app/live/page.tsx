@@ -218,24 +218,6 @@ function IntelSandbox() {
     setResult(null);
     setError(null);
     
-    // Validate API configuration
-    const API_BASE = getApiBaseNormalized();
-    const hostname = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
-    const envUrl = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_API_URL : 'N/A';
-    
-    // Check if we're on .pages.dev without NEXT_PUBLIC_API_URL
-    if (hostname.endsWith('.pages.dev') && (!envUrl || envUrl === 'N/A')) {
-      setError(
-        `SETUP REQUIRED: Live API unavailable.\n\n` +
-        `You're on production (${hostname}) but NEXT_PUBLIC_API_URL is not configured.\n\n` +
-        `Fix: Go to Cloudflare Pages > Settings > Environment Variables\n` +
-        `Add: NEXT_PUBLIC_API_URL = https://varaksha-production.up.railway.app\n` +
-        `Then: Redeploy the frontend on Deployments tab\n\n` +
-        `See FIX_LIVE_API_UNAVAILABLE.md for detailed steps.`
-      );
-      return;
-    }
-    
     setStage(1);
 
     // Stage 1 → 2 → 3 → result with fixed delays
@@ -310,12 +292,7 @@ function IntelSandbox() {
         if (err instanceof TypeError && errorMsg.includes('fetch')) {
           detailedError += `Issue: Network/CORS error - Backend may not be accessible\n`;
           detailedError += `Debug: Tried to reach ${API_BASE}\n`;
-          if (!envUrl || envUrl === 'N/A') {
-            detailedError += `Fix: Set NEXT_PUBLIC_API_URL in Cloudflare env vars\n`;
-          }
-          if (hostname.endsWith('.pages.dev') && !envUrl) {
-            detailedError += `For .pages.dev domains, NEXT_PUBLIC_API_URL MUST be set in Cloudflare`;
-          }
+          detailedError += `Check: Is the backend running at ${API_BASE}?`;
         } else if (errorMsg.includes('404')) {
           detailedError += `Issue: Endpoint not found (404) - Gateway may not be running\n`;
           detailedError += `Check: Is gateway running on ${API_BASE}?`;
