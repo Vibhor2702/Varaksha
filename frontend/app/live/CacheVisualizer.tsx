@@ -55,7 +55,9 @@ const CACHE_POOL: CacheEntry[] = [
 
 const AUTO_ADVANCE_MS = 5000;
 const CHAR_DELAY_MS   = 22;    // ms per typed character
-const API_BASE        = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Normalize API URL: remove trailing slash and use Railway as default (not localhost)
+const API_BASE_RAW    = process.env.NEXT_PUBLIC_API_URL || "https://varaksha-production.up.railway.app";
+const API_BASE        = API_BASE_RAW.endsWith("/") ? API_BASE_RAW.slice(0, -1) : API_BASE_RAW;
 
 type Phase = "idle" | "query" | "hashing" | "lookup" | "verdict";
 

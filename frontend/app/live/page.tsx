@@ -12,7 +12,9 @@ import { LegalReport     } from "./LegalReport";
 
 const FEED_INTERVAL_MS  = 2200;   // New transaction injected to feed every N ms
 const FEED_MAX_ROWS     = 60;     // Max rows before old ones are pruned
-const API_BASE          = process.env.NEXT_PUBLIC_API_URL || "https://varaksha-production.up.railway.app";
+// Normalize API URL: remove trailing slash to prevent double slashes
+const API_BASE_RAW      = process.env.NEXT_PUBLIC_API_URL || "https://varaksha-production.up.railway.app";
+const API_BASE          = API_BASE_RAW.endsWith("/") ? API_BASE_RAW.slice(0, -1) : API_BASE_RAW;
 let streamSeq           = 1;
 
 // ── Synthetic data pools ──────────────────────────────────────────────────────
@@ -266,8 +268,9 @@ function IntelSandbox() {
             "Real ONNX inference via Railway API",
           ],
         });
-      } catch {
-        setError("Live API unavailable. Set NEXT_PUBLIC_API_URL and redeploy frontend.");
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        setError(`API Error: ${API_BASE}/v1/tx failed (${errorMsg}). Check Cloudflare env var NEXT_PUBLIC_API_URL or Railway backend status.`);
       } finally {
         setStage(0);
       }
