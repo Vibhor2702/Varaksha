@@ -218,6 +218,12 @@ function IntelSandbox() {
     setResult(null);
     setError(null);
     
+    // Log debugging info
+    const API_BASE = getApiBaseNormalized();
+    console.log('[Varaksha] Starting test transaction...');
+    console.log('[Varaksha] API Base URL:', API_BASE);
+    console.log('[Varaksha] Hostname:', typeof window !== 'undefined' ? window.location.hostname : 'unknown');
+    
     setStage(1);
 
     // Stage 1 → 2 → 3 → result with fixed delays
@@ -632,7 +638,7 @@ function IntelSandbox() {
         {/* Result */}
         {ResultPanel}
         {error && (
-          <p className="mt-3 font-barlow text-[0.68rem] text-block/70">{error}</p>
+          <pre className="mt-3 font-barlow text-[0.68rem] text-block/70 whitespace-pre-wrap break-words">{error}</pre>
         )}
       </div>
     </section>
