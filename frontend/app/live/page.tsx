@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { CacheVisualizer } from "./CacheVisualizer";
 import { SecurityArena   } from "./SecurityArena";
 import { LegalReport     } from "./LegalReport";
@@ -297,11 +296,8 @@ function IntelSandbox() {
 
   // ── sub-render: result panel ────────────────────────────────────────────────
   const ResultPanel = result ? (
-    <motion.div
+    <div
       key={result.verdict + result.riskScore}
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.38, ease: "easeOut" }}
       className="mt-5 border border-ink/20 overflow-hidden"
     >
       {/* Header strip */}
@@ -313,10 +309,8 @@ function IntelSandbox() {
         }`}
       >
         <div className="flex items-center gap-2.5">
-          <motion.span
+          <span
             className={`inline-block w-2 h-2 rounded-full ${verdictDot(result.verdict)}`}
-            animate={{ opacity: [1, 0.3, 1] }}
-            transition={{ duration: 0.9, repeat: Infinity }}
           />
           <span className="font-barlow text-[0.56rem] tracking-[0.28em] uppercase text-cream/35">
             Varaksha Engine · Verdict
@@ -346,11 +340,9 @@ function IntelSandbox() {
           </p>
           <div className="flex items-center gap-2.5 mb-1">
             <div className="flex-1 h-1.5 bg-cream/[0.08] overflow-hidden">
-              <motion.div
+              <div
                 className={`h-full ${riskBar(result.riskScore)}`}
-                initial={{ width: "0%" }}
-                animate={{ width: `${result.riskScore * 100}%` }}
-                transition={{ duration: 0.75, ease: "easeOut" }}
+                style={{ width: `${result.riskScore * 100}%` }}
               />
             </div>
             <span className="font-courier text-[0.66rem] text-cream/55">
@@ -366,11 +358,8 @@ function IntelSandbox() {
           </p>
           <ul className="space-y-1.5">
             {result.reasons.map((r, i) => (
-              <motion.li
+              <li
                 key={i}
-                initial={{ opacity: 0, x: 8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.07 }}
                 className="flex items-start gap-2"
               >
                 <span
@@ -379,12 +368,12 @@ function IntelSandbox() {
                 <span className="font-barlow text-[0.72rem] text-cream/55 leading-snug">
                   {r}
                 </span>
-              </motion.li>
+              </li>
             ))}
           </ul>
         </div>
       </div>
-    </motion.div>
+    </div>
   ) : null;
 
   // ── sub-render: loading stage indicator ────────────────────────────────────
@@ -394,12 +383,10 @@ function IntelSandbox() {
         const active   = stage === i + 1;
         const complete = stage > i + 1;
         return (
-          <motion.div
+          <div
             key={i}
             className="flex items-center gap-3"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: active || complete ? 1 : 0.22 }}
-            transition={{ duration: 0.3 }}
+            style={{ opacity: active || complete ? 1 : 0.22 }}
           >
             {/* Indicator */}
             <div className="w-4 h-4 shrink-0 flex items-center justify-center">
@@ -414,10 +401,8 @@ function IntelSandbox() {
                   />
                 </svg>
               ) : active ? (
-                <motion.span
+                <span
                   className="inline-block w-2 h-2 rounded-full bg-saffron"
-                  animate={{ opacity: [1, 0.25, 1] }}
-                  transition={{ duration: 0.7, repeat: Infinity }}
                 />
               ) : (
                 <span className="w-2 h-2 rounded-full border border-cream/15" />
@@ -446,14 +431,12 @@ function IntelSandbox() {
             {/* Shimmer bar */}
             {active && (
               <div className="flex-1 h-px overflow-hidden bg-cream/[0.06]">
-                <motion.div
+                <div
                   className="h-full bg-saffron/50"
-                  animate={{ x: ["-100%", "100%"] }}
-                  transition={{ duration: 0.85, repeat: Infinity, ease: "linear" }}
                 />
               </div>
             )}
-          </motion.div>
+          </div>
         );
       })}
     </div>
@@ -585,25 +568,19 @@ function IntelSandbox() {
         </div>
 
         {/* Block trigger hint */}
-        <AnimatePresence>
-          {parseFloat(form.amount) > 50000 && form.newDevice && (
-            <motion.p
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="font-barlow text-[0.62rem] text-block/60 tracking-wide mb-4 border-l-2 border-block/40 pl-3"
-            >
-              High-value amount + new device detected &mdash; simulation will
-              return <strong className="text-block font-semibold">BLOCK</strong>
-            </motion.p>
-          )}
-        </AnimatePresence>
+        {parseFloat(form.amount) > 50000 && form.newDevice && (
+          <p
+            className="font-barlow text-[0.62rem] text-block/60 tracking-wide mb-4 border-l-2 border-block/40 pl-3"
+          >
+            High-value amount + new device detected &mdash; simulation will
+            return <strong className="text-block font-semibold">BLOCK</strong>
+          </p>
+        )}
 
         {/* Test button */}
-        <motion.button
+        <button
           onClick={handleTest}
           disabled={isRunning}
-          whileHover={!isRunning ? { scale: 1.015, backgroundColor: "#1d4ed8" } : {}}
           whileTap={!isRunning ? { scale: 0.97 } : {}}
           className={`inline-flex items-center gap-3 font-barlow font-semibold text-[0.76rem] tracking-[0.14em] uppercase px-7 py-3.5 transition-all duration-200 ${
             isRunning
@@ -613,10 +590,8 @@ function IntelSandbox() {
         >
           {isRunning ? (
             <>
-              <motion.span
+              <span
                 className="inline-block w-2 h-2 rounded-full bg-saffron/70"
-                animate={{ opacity: [1, 0.2, 1] }}
-                transition={{ duration: 0.7, repeat: Infinity }}
               />
               Running…
             </>
@@ -626,7 +601,7 @@ function IntelSandbox() {
               Test Transaction
             </>
           )}
-        </motion.button>
+        </button>
 
         {/* Loading stages */}
         {LoadingBar}
@@ -751,10 +726,8 @@ function TransactionFeed() {
       {/* Module header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-cream/[0.07] bg-cream/[0.025] shrink-0">
         <div className="flex items-center gap-2.5">
-          <motion.span
+          <span
             className="inline-block w-1.5 h-1.5 rounded-full bg-allow"
-            animate={{ opacity: [1, 0.25, 1] }}
-            transition={{ duration: paused ? 100 : 1.1, repeat: Infinity }}
           />
           <span className="font-barlow text-[0.57rem] tracking-[0.30em] uppercase text-cream/40">
             Module B &mdash; Live Transaction Feed
@@ -805,17 +778,13 @@ function TransactionFeed() {
 
       {/* Scrollable feed body */}
       <div className="overflow-y-auto flex-1" style={{ maxHeight: "600px" }}>
-        <AnimatePresence initial={false}>
-          {rows.map((row, i) => (
-            <motion.div
-              key={row.id}
-              initial={{ opacity: 0, y: -10, backgroundColor: "rgba(37,99,235,0.12)" }}
-              animate={{ opacity: 1, y: 0,  backgroundColor: "rgba(255,255,255,0)" }}
-              transition={{ duration: 0.45 }}
-              className={`grid grid-cols-[58px_1fr_1fr_72px_72px_56px_64px] gap-2 px-4 py-2.5 border-b border-cream/[0.04] hover:bg-cream/[0.03] transition-colors ${
-                i === 0 && !paused ? "bg-cream/[0.025]" : ""
-              }`}
-            >
+        {rows.map((row, i) => (
+          <div
+            key={row.id}
+            className={`grid grid-cols-[58px_1fr_1fr_72px_72px_56px_64px] gap-2 px-4 py-2.5 border-b border-cream/[0.04] hover:bg-cream/[0.03] transition-colors ${
+              i === 0 && !paused ? "bg-cream/[0.025]" : ""
+            }`}
+          >
               <span className="font-courier text-[0.6rem] text-cream/50 font-semibold tabular-nums">
                 {row.ts}
               </span>
@@ -851,9 +820,8 @@ function TransactionFeed() {
               >
                 {row.verdict}
               </span>
-            </motion.div>
+            </div>
           ))}
-        </AnimatePresence>
       </div>
 
       {/* Footer totals bar */}
