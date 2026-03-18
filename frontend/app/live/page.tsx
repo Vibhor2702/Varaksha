@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CacheVisualizer } from "./CacheVisualizer";
 import { SecurityArena   } from "./SecurityArena";
 import { LegalReport     } from "./LegalReport";
+import { getApiBaseNormalized } from "../lib/api-config";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -12,9 +13,6 @@ import { LegalReport     } from "./LegalReport";
 
 const FEED_INTERVAL_MS  = 2200;   // New transaction injected to feed every N ms
 const FEED_MAX_ROWS     = 60;     // Max rows before old ones are pruned
-// Normalize API URL: remove trailing slash to prevent double slashes
-const API_BASE_RAW      = process.env.NEXT_PUBLIC_API_URL || "https://varaksha-production.up.railway.app";
-const API_BASE          = API_BASE_RAW.endsWith("/") ? API_BASE_RAW.slice(0, -1) : API_BASE_RAW;
 let streamSeq           = 1;
 
 // ── Synthetic data pools ──────────────────────────────────────────────────────
@@ -227,6 +225,7 @@ function IntelSandbox() {
     setTimeout(() => setStage(3), 1850);
     setTimeout(async () => {
       try {
+        const API_BASE = getApiBaseNormalized();
         const payload = {
           vpa: form.senderVpa,
           amount: parseFloat(form.amount) || 0,
@@ -270,7 +269,8 @@ function IntelSandbox() {
         });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        setError(`API Error: ${API_BASE}/v1/tx failed (${errorMsg}). Check Cloudflare env var NEXT_PUBLIC_API_URL or Railway backend status.`);
+        const API_BASE = getApiBaseNormalized();
+        setError(`API Error: ${API_BASE}/v1/tx failed (${errorMsg}). Backend unavailable or network error.`);
       } finally {
         setStage(0);
       }
@@ -655,7 +655,7 @@ function TransactionFeed() {
 
     function connectStream() {
       if (es) return;
-
+      const API_BASE = getApiBaseNormalized();
       es = new EventSource(`${API_BASE}/v1/stream`);
 
       es.onmessage = (e) => {
