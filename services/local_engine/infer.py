@@ -34,6 +34,7 @@ MODEL_DIR  = ROOT / "data" / "models"
 # ── ONNX model paths ──────────────────────────────────────────────────────────
 _RF_ONNX   = MODEL_DIR / "varaksha_rf_model.onnx"
 _ISO_ONNX  = MODEL_DIR / "isolation_forest.onnx"
+_SCALER_ONNX = MODEL_DIR / "scaler.onnx"
 _META      = MODEL_DIR / "feature_meta.json"
 
 # ── Fallback: feature column definitions (mirrors train_ensemble.py) ─────────
@@ -89,6 +90,16 @@ class VarakshaScoringEngine:
 
         self._rf_sess  = ort.InferenceSession(str(_RF_ONNX),  sess_options=opts)
         self._iso_sess = ort.InferenceSession(str(_ISO_ONNX), sess_options=opts) if _ISO_ONNX.exists() else None
+        
+        # Load scaler session — CRITICAL for correct feature scaling
+        # Models trained on scaled features (mean=0, std=1), so raw features MUST be scaled
+        if _SCALER_ONNX.exists():
+            self._scaler_sess = ort.InferenceSession(str(_SCALER_ONNX), sess_options=opts)
+        else:
+            # Fallback: if scaler not found, features won't be scaled (will cause constant ~0.68 output)
+            import logging as logging_fallback
+            logging_fallback.warning(f"Scaler ONNX not found at {_SCALER_ONNX} — using raw features (this will cause poor scoring!)")
+            self._scaler_sess = None
 
         # Feature names from metadata (saved during training)
         if _META.exists():
@@ -132,8 +143,15 @@ class VarakshaScoringEngine:
         """
         X = self._extract(tx)
 
+        # Scale features using exported ONNX scaler before RF inference
+        # (Training used StandardScaler, so raw features need scaling to match training data distribution)
+        if self._scaler_sess is not None:
+            X_scaled = np.array(self._scaler_sess.run(None, {"X": X})[0], dtype=np.float32)
+        else:
+            X_scaled = X
+
         # RF probability — shape-aware parsing to handle both predict() and predict_proba() outputs
-        rf_out = self._rf_sess.run(None, {"X": X})
+        rf_out = self._rf_sess.run(None, {"X": X_scaled})
         out1 = np.array(rf_out[1]) if len(rf_out) > 1 else np.array(rf_out[0])
         if out1.ndim == 2 and out1.shape[1] == 2:
             fraud_proba = float(out1[0][1])          # predict_proba standard: (1, 2) shape
@@ -144,7 +162,7 @@ class VarakshaScoringEngine:
 
         # IsolationForest anomaly score
         if self._iso_sess is not None:
-            iso_out      = self._iso_sess.run(None, {"X": X})
+            iso_out      = self._iso_sess.run(None, {"X": X_scaled})
             anomaly_score = float(iso_out[1].flat[0])   # decision_function output
         else:
             anomaly_score = 0.0

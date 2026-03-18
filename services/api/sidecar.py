@@ -59,8 +59,21 @@ def score(body: ScoreRequest) -> dict[str, object]:
             ]
         ], dtype=np.float32)
 
+        # Apply feature scaling using scaler session (model was trained on scaled features)
+        try:
+            if engine._scaler_sess is not None:  # pylint: disable=protected-access
+                try:
+                    x_scaled = np.array(engine._scaler_sess.run(None, {"X": x})[0], dtype=np.float32)  # pylint: disable=protected-access
+                except Exception as scale_err:
+                    raise RuntimeError(f"Scaler application failed: {scale_err}") from scale_err
+            else:
+                # Fallback to raw (unscaled) features if scaler unavailable
+                x_scaled = x
+        except Exception:
+            x_scaled = x
+
         # Use the real ONNX sessions from infer.py.
-        rf_out = engine._rf_sess.run(None, {"X": x})  # pylint: disable=protected-access
+        rf_out = engine._rf_sess.run(None, {"X": x_scaled})  # pylint: disable=protected-access
         out1 = np.array(rf_out[1]) if len(rf_out) > 1 else np.array(rf_out[0])
         if out1.ndim == 2 and out1.shape[1] == 2:
             rf_prob = float(out1[0][1])
@@ -71,7 +84,7 @@ def score(body: ScoreRequest) -> dict[str, object]:
 
         iso_score = 0.0
         if engine._iso_sess is not None:  # pylint: disable=protected-access
-            iso_out = engine._iso_sess.run(None, {"X": x})  # pylint: disable=protected-access
+            iso_out = engine._iso_sess.run(None, {"X": x_scaled})  # pylint: disable=protected-access
             iso_score = float(iso_out[1].flat[0])
         else:
             iso_out = None
