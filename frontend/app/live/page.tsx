@@ -550,10 +550,9 @@ function IntelSandbox() {
                   form.newDevice ? "bg-block/60" : "bg-cream/[0.12]"
                 }`}
               >
-                <motion.div
+                <div
                   className="absolute top-0.5 w-3 h-3 rounded-full bg-cream"
-                  animate={{ left: form.newDevice ? "18px" : "2px" }}
-                  transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                  style={{ left: form.newDevice ? "18px" : "2px" }}
                 />
               </div>
               <span
@@ -581,7 +580,6 @@ function IntelSandbox() {
         <button
           onClick={handleTest}
           disabled={isRunning}
-          whileTap={!isRunning ? { scale: 0.97 } : {}}
           className={`inline-flex items-center gap-3 font-barlow font-semibold text-[0.76rem] tracking-[0.14em] uppercase px-7 py-3.5 transition-all duration-200 ${
             isRunning
               ? "bg-cream/10 text-cream/22 cursor-not-allowed"
@@ -953,10 +951,8 @@ function MLModelModule() {
           <span className="font-barlow text-[0.57rem] tracking-[0.30em] uppercase text-cream/40">
             Module F &mdash; ML Model Stack
           </span>
-          <motion.span
+          <span
             className="inline-block w-1.5 h-1.5 rounded-full bg-saffron"
-            animate={{ opacity: [1, 0.25, 1] }}
-            transition={{ duration: 2.4, repeat: Infinity }}
           />
         </div>
         <span className="font-barlow text-[0.48rem] tracking-[0.20em] uppercase text-cream/18">
@@ -967,12 +963,8 @@ function MLModelModule() {
       {/* Cards */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-px bg-cream/[0.04] p-px">
         {ML_MODELS.map((m) => (
-          <motion.div
+          <div
             key={m.code}
-            initial={{ opacity: 0, y: 14 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-60px" }}
-            transition={{ duration: 0.5, delay: ML_MODELS.indexOf(m) * 0.12 }}
             className="bg-ink flex flex-col"
           >
             {/* Accent top-bar */}
@@ -1041,13 +1033,9 @@ function MLModelModule() {
                         <span className="font-courier text-[0.58rem] text-cream/60">{met.value}</span>
                       </div>
                       <div className="h-px bg-cream/[0.06] overflow-hidden">
-                        <motion.div
+                        <div
                           className="h-full"
-                          style={{ backgroundColor: m.accent }}
-                          initial={{ width: 0 }}
-                          whileInView={{ width: `${met.pct}%` }}
-                          viewport={{ once: true }}
-                          transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
+                          style={{ backgroundColor: m.accent, width: `${met.pct}%` }}
                         />
                       </div>
                     </div>
@@ -1065,7 +1053,7 @@ function MLModelModule() {
                 </span>
               </div>
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
     </section>
@@ -1092,10 +1080,8 @@ export default function LivePage() {
     >
 
       {/* ── Fixed scanning line effect ─────────────────────────────────── */}
-      <motion.div
+      <div
         className="pointer-events-none fixed inset-x-0 h-[1px] bg-saffron/8 z-50"
-        animate={{ top: ["0%", "100%"] }}
-        transition={{ duration: 7, repeat: Infinity, ease: "linear" }}
       />
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -1126,10 +1112,8 @@ export default function LivePage() {
               { label: "Graph",    color: "bg-saffron"  },
             ].map((p) => (
               <div key={p.label} className="flex items-center gap-1.5">
-                <motion.span
+                <span
                   className={`inline-block w-1.5 h-1.5 rounded-full ${p.color}`}
-                  animate={{ opacity: [1, 0.25, 1] }}
-                  transition={{ duration: 1.3, repeat: Infinity }}
                 />
                 <span className="hidden sm:inline font-barlow text-[0.52rem] tracking-widest uppercase text-cream/22">
                   {p.label}
@@ -1243,28 +1227,21 @@ function KpiStrip() {
   return (
     <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
       {KPI_DEFS.map((k) => (
-        <motion.div
+        <div
           key={k.label}
-          layout
           className={`border ${k.border} bg-cream/[0.025] px-4 py-4 flex flex-col gap-1`}
         >
           <span className="font-barlow text-[0.52rem] tracking-[0.26em] uppercase text-cream/22">
             {k.label}
           </span>
-          <AnimatePresence mode="popLayout">
-            <motion.span
-              key={displayVal(k.key)}
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              transition={{ duration: 0.25 }}
-              className={`font-courier font-bold leading-none ${k.color}`}
-              style={{ fontSize: "clamp(1.6rem, 2.8vw, 2.4rem)" }}
-            >
-              {displayVal(k.key)}
-            </motion.span>
-          </AnimatePresence>
-        </motion.div>
+          <span
+            key={displayVal(k.key)}
+            className={`font-courier font-bold leading-none ${k.color}`}
+            style={{ fontSize: "clamp(1.6rem, 2.8vw, 2.4rem)" }}
+          >
+            {displayVal(k.key)}
+          </span>
+        </div>
       ))}
     </div>
   );
