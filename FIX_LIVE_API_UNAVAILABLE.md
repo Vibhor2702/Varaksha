@@ -8,6 +8,7 @@ If you see: **"Live API unavailable. Set NEXT_PUBLIC_API_URL in Cloudflare Pages
 1. Go to https://railway.app
 2. Find your Varaksha project
 3. Copy the production URL (should look like: `https://varaksha-production.up.railway.app`)
+   - Note: Do NOT include trailing slash
 
 #### Step 2: Set Environment Variable in Cloudflare
 1. Go to Cloudflare Pages → Your Project Name
@@ -15,7 +16,7 @@ If you see: **"Live API unavailable. Set NEXT_PUBLIC_API_URL in Cloudflare Pages
 3. Click **Environment Variables**
 4. Click **Add Variable**
 5. **Variable name**: `NEXT_PUBLIC_API_URL`
-6. **Value**: Paste your Railway URL (e.g., `https://varaksha-production.up.railway.app`)
+6. **Value**: Paste your Railway URL without trailing slash (e.g., `https://varaksha-production.up.railway.app`)
 7. Click **Add variable**
 
 #### Step 3: Redeploy Frontend
@@ -42,7 +43,12 @@ If you see: **"Live API unavailable. Set NEXT_PUBLIC_API_URL in Cloudflare Pages
 **What if you don't have a Railway backend?**
 - The Gateway must be running on Railway for this to work
 - Check that your Railway deployment is active and not suspended
-- Verify the Health endpoint: `curl https://your-url.up.railway.app/health`
+- Verify the Health endpoint works:
+  ```bash
+  curl https://varaksha-production.up.railway.app/health
+  # Should respond with: {"status":"ok","cache_entries":0,"version":"2.1.0"}
+  ```
+- If it doesn't respond, your Railway service is down - check Railway dashboard
 
 **Local Development?**
 You don't need NEXT_PUBLIC_API_URL locally. The frontend will auto-detect:

@@ -240,9 +240,12 @@ function IntelSandbox() {
     // Check if we're on .pages.dev without NEXT_PUBLIC_API_URL
     if (hostname.endsWith('.pages.dev') && (!envUrl || envUrl === 'N/A')) {
       setError(
-        `Live API unavailable. Set NEXT_PUBLIC_API_URL in Cloudflare Pages environment variables and redeploy frontend.\n` +
-        `Current domain: ${hostname}\n` +
-        `To fix: Go to Cloudflare Pages > Settings > Environment Variables > Add NEXT_PUBLIC_API_URL`
+        `SETUP REQUIRED: Live API unavailable.\n\n` +
+        `You're on production (${hostname}) but NEXT_PUBLIC_API_URL is not configured.\n\n` +
+        `Fix: Go to Cloudflare Pages > Settings > Environment Variables\n` +
+        `Add: NEXT_PUBLIC_API_URL = https://varaksha-production.up.railway.app\n` +
+        `Then: Redeploy the frontend on Deployments tab\n\n` +
+        `See FIX_LIVE_API_UNAVAILABLE.md for detailed steps.`
       );
       return;
     }

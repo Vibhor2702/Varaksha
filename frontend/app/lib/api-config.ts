@@ -23,7 +23,8 @@ export function getApiBase(): string {
   // This should be explicitly set in Cloudflare Pages environment variables
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
   if (envUrl && envUrl.trim()) {
-    const normalized = envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+    // Remove trailing slash if present
+    const normalized = envUrl.trim().endsWith('/') ? envUrl.trim().slice(0, -1) : envUrl.trim();
     if (normalized && normalized.startsWith('http')) {
       return normalized;
     }
@@ -37,8 +38,7 @@ export function getApiBase(): string {
     // Production: Cloudflare Pages serving from varaksha.pages.dev or similar
     if (hostname.endsWith('.pages.dev')) {
       // IMPORTANT: This requires NEXT_PUBLIC_API_URL to be set in Cloudflare
-      // If not set, requests to Railway may fail due to dynamic routing
-      // Default to Railway production but this may not work
+      // If not set, requests to Railway default to production
       return 'https://varaksha-production.up.railway.app';
     }
     
