@@ -28,7 +28,7 @@ const VPA_RECEIVERS = [
   "auto.rickshaw@paytm",    "electricity.board@okhdfc","booking.com@axisbank",
   "railway.prs@ybl",        "cashback.offer@okaxis",  "loan.repay@axisbank",
 ];
-const MERCHANT_CATS = ["Grocery", "Fuel", "Food", "Pharmacy", "Utilities", "Travel", "Finance"];
+const MERCHANT_CATS = ["FOOD", "UTILITY", "ECOM", "GAMBLING", "TRAVEL"];
 
 // Feed transactions always ALLOW; occasional edge-cases are flagged
 const FEED_AMOUNTS   = [120, 499, 1200, 4750, 890, 2400, 340, 7800, 1100, 60000, 310, 5500];
@@ -127,20 +127,6 @@ function nextFeedRow(): FeedRow {
   };
 }
 
-function mapMerchantCategory(input: string): string {
-  const key = input.toLowerCase();
-  // Map UI categories to API category codes
-  if (key === "grocery") return "FOOD";
-  if (key === "fuel") return "UTILITY";
-  if (key === "food") return "FOOD";
-  if (key === "pharmacy") return "ECOM";
-  if (key === "utilities") return "UTILITY";
-  if (key === "travel") return "TRAVEL";
-  if (key === "finance") return "GAMBLING";
-  // Default fallback
-  return "ECOM";
-}
-
 function mapTimeBucketToHour(bucket: string): number {
   if (bucket === "06:00-09:00") return 8;
   if (bucket === "09:00-18:00") return 14;
@@ -214,7 +200,7 @@ const FORM_DEFAULTS: SandboxForm = {
   senderVpa:   "ravi.kumar@axisbank",
   receiverVpa: "kirana.store@okhdfc",
   amount:      "4750",
-  merchantCat: "Grocery",
+  merchantCat: "FOOD",
   timeOfDay:   "09:00-18:00",
   newDevice:   false,
 };
@@ -272,7 +258,7 @@ function IntelSandbox() {
         const payload = {
           vpa: form.senderVpa,
           amount: amount,
-          merchant_category: mapMerchantCategory(form.merchantCat),
+          merchant_category: form.merchantCat,
           transaction_type: "DEBIT",
           device_type: "ANDROID",
           hour_of_day: mapTimeBucketToHour(form.timeOfDay),
