@@ -24,6 +24,7 @@
   - [Phase 10 — Target Leakage Audit + Loaders Fixed](#phase-10--target-leakage-audit--loaders-fixed)
   - [Phase 11 — Font Visibility + Timeline Polish](#phase-11--font-visibility--timeline-polish)
   - [Phase 16 — Frontend Integration & Cloudflare Deployment Fixes](#phase-16--frontend-integration--cloudflare-deployment-fixes)
+  - [Phase 17 — Roadmap Alignment: Hackathon Timeline + Feature Priorities](#phase-17--roadmap-alignment-hackathon-timeline--feature-priorities)
 - [Directory Map](#directory-map)
 - [Architecture Deep-Dive](#architecture-deep-dive)
   - [Why Five Separate Layers?](#why-five-separate-layers)
@@ -1008,6 +1009,100 @@ Both explain why `NEXT_PUBLIC_API_URL` must be set in Cloudflare for static depl
    - Go to https://varaksha.pages.dev/live
    - Click "Test Transaction"
    - Should return ALLOW/FLAG/BLOCK with risk score
+
+---
+
+### Phase 17 — Roadmap Alignment: Hackathon Timeline + Feature Priorities
+
+**Date:** March 18, 2026  
+**Status:** Planning phase (post-submission preparation)
+
+#### Hackathon Official Timeline
+
+| Phase | Dates | Scope | Varaksha Focus |
+|-------|-------|-------|----------------|
+| **Phase 1 (Submission)** | Mar 19 - Apr 18 | Initial product demo + core features | Submit with Docker image + Next.js web |
+| **Phase 2 (Finals)** | Apr 19 - Apr 29 | Scaled features + advanced integration | Deploy on-device inference + legal reports |
+
+#### Updated Roadmap (Revised March 18, 2026)
+
+**Key Change:** Mobile SDK removed (too heavy for 2-person team). Focus on **Docker image** + core backend infrastructure.
+
+##### Tier 1: This Week (Before Submission)
+
+| # | Feature | Effort | Priority | Reason |
+|---|---------|--------|----------|--------|
+| **#1** | 22 Scheduled Languages (IndicTrans2) | 1-2d | 🔴 Highest | Strongest NPCI talking point, replaces edge-tts |
+| **#8** | Open-Source Release (Apache 2.0) | 1d | 🔴 Highest | Resolves IT trust objection, free marketing |
+
+**Docker image packaging** included in both.
+
+##### Tier 2: Phase 1 (Before Final Submission — Apr 18)
+
+| # | Feature | Effort | Priority | Reason |
+|---|---------|--------|----------|--------|
+| **#3** | On-Device ONNX Inference (wasm-pack) | 3-5d | 🟠 High | Eliminates uptime objection, enables offline mode |
+| **#7** | Automated Regulatory Reporting | 3-4d | 🟠 High | Completes compliance gap, answers liability |
+| **#9** | Report Dispatch System (NEW) | 2-3d | 🟠 High | Sends verdicts to email/Kafka/webhook |
+| **#5** | Live LLM Legal Summaries (Groq) | 2d | 🟡 Medium | Optional mode, docs legal reasoning |
+| **#10** | Shadow Mode Pilot Flag (NEW) | 1d | 🟡 Medium | Answers "we already have a system" objection |
+
+##### Tier 3: Phase 2 (Finals — Apr 19-29)
+
+| # | Feature | Effort | Timeline | Status |
+|---|---------|--------|----------|--------|
+| **#6** | NPCI Consortium Risk Sharing | Vision | Post-pilot | Architecture ready, needs bank partnerships |
+
+##### Tier 4: Post-Hackathon (Future Scope)
+
+| # | Feature | Effort | Timeline | Status |
+|---|---------|--------|----------|--------|
+| **#4** | Streaming Graph Analytics (Flink/Kafka) | 6-8w | Post-funding | Requires cluster infrastructure |
+| **#2** | Mobile SDK (Android/iOS) | 8-10w | Post-funding | Build after Docker + on-device proof |
+
+#### Implementation Path (Week-by-Week)
+
+**Week 1 (This Week: Mar 18-22)**
+- Swap edge-tts → IndicTrans2 for 22 languages
+- Add Apache 2.0 LICENSE
+- Package as Docker image
+- Push to GitHub public + Docker Hub
+
+**Week 2-3 (Mar 23 - Apr 6)**
+- On-device ONNX inference (wasm)
+- Regulatory reporting pipeline (CSV export + audit log)
+- Report dispatch webhooks
+
+**Week 4 (Apr 7-15)**
+- LLM legal summaries (Groq optional mode)
+- Shadow mode flag + rollout controls
+- Performance optimization + testing
+
+**Week 5 (Apr 16-18)**
+- Final polish + bug fixes
+- Documentation + deployment guide
+- Submit Phase 1
+
+**Weeks 6-7 (Apr 19-29)**
+- Scaling improvements
+- Bank partnership outreach
+- Phase 2 finals preparation
+
+#### What's Removed
+- ❌ Full Mobile SDK (deferred post-funding)
+- ❌ Streaming Kafka pipeline (deferred post-funding)  
+- ✅ Keep: Docker image, on-device inference, legal reports, shadow mode
+
+#### Success Metrics (Phase 1 Submission)
+
+| Metric | Target | Status |
+|--------|--------|--------|
+| Docker image runnable | 1 `docker run` command | TBD (Week 1) |
+| 22 languages supported | All 22 Indian scheduled languages | TBD (Week 1) |
+| Open source public | Apache 2.0, GitHub public | TBD (Week 1) |
+| On-device inference | ONNX in browser (wasm) | TBD (Week 2-3) |
+| Regulatory reports | Automated CSV export + audit trail | TBD (Week 2-3) |
+| Backend + Frontend ready | Docker container with all 5 layers | ✅ Current |
 
 ---
 
