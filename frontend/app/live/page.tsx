@@ -231,6 +231,22 @@ function IntelSandbox() {
     if (isRunning) return;
     setResult(null);
     setError(null);
+    
+    // Validate API configuration
+    const API_BASE = getApiBaseNormalized();
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
+    const envUrl = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_API_URL : 'N/A';
+    
+    // Check if we're on .pages.dev without NEXT_PUBLIC_API_URL
+    if (hostname.endsWith('.pages.dev') && (!envUrl || envUrl === 'N/A')) {
+      setError(
+        `Live API unavailable. Set NEXT_PUBLIC_API_URL in Cloudflare Pages environment variables and redeploy frontend.\n` +
+        `Current domain: ${hostname}\n` +
+        `To fix: Go to Cloudflare Pages > Settings > Environment Variables > Add NEXT_PUBLIC_API_URL`
+      );
+      return;
+    }
+    
     setStage(1);
 
     // Stage 1 → 2 → 3 → result with fixed delays
