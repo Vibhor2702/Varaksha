@@ -1,0 +1,46 @@
+# Python Dependencies for Varaksha ML Pipeline
+
+# Core Data Processing
+polars==1.39.3
+pandas==2.3.3
+numpy==2.4.2
+
+# ML & Modeling
+lightgbm==4.6.0
+scikit-learn==1.8.0
+imbalanced-learn==0.14.1
+
+# Configuration & IO
+pyyaml==6.0.3
+python-dotenv==1.2.2
+
+# Visualization & Analysis
+matplotlib==3.10.8
+seaborn==0.13.2
+
+# Model Export/Serving
+onnxmltools==1.16.0
+onnx==1.21.0
+skl2onnx==1.20.0
+onnxruntime>=1.17.0
+
+# Console output (Windows ANSI support for gateway script)
+colorama>=0.4.6
+
+# Graph Agent (L3)
+networkx>=3.0
+
+# Multilingual Alert Agent (L4)
+# Note: googletrans==4.0.0-rc1 is required — newer releases have known regressions
+googletrans==4.0.0-rc1
+edge-tts>=6.1.9
+
+# Utilities
+tqdm==4.67.3
+click==8.3.1
+
+# Development (optional)
+pytest==7.4.3
+black==24.1.1
+flake8==7.0.0
+mypy==1.7.1
