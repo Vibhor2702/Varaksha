@@ -332,43 +332,56 @@ function TierScenarioArchitecture({ tier }: { tier: Tier }) {
         <span className="font-courier text-[0.52rem] text-cream/20">{tierTitle}</span>
       </div>
 
-      <div className="p-5 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          {steps.map((s, i) => {
-            const isActive = i === active;
-            return (
-              <button
-                key={s.id}
-                onClick={() => setActive(i)}
-                className={`text-left border px-3 py-2 transition-colors ${
-                  isActive
-                    ? "border-saffron/45 bg-saffron/10"
-                    : "border-cream/[0.08] bg-cream/[0.015] hover:bg-cream/[0.04]"
-                }`}
-              >
-                <p className="font-barlow text-[0.46rem] tracking-[0.24em] uppercase text-cream/28 mb-1">{s.actor}</p>
-                <p className={`font-courier text-[0.62rem] ${isActive ? "text-saffron" : "text-cream/55"}`}>{s.title}</p>
-                <div className="mt-2 h-[2px] bg-cream/[0.08]">
-                  <div className={`h-full ${isActive ? "bg-saffron" : "bg-cream/[0.16]"}`} style={{ width: `${((i + 1) / steps.length) * 100}%` }} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
+      <div className="p-5">
+        <div className="grid grid-cols-1 xl:grid-cols-[260px_1fr] gap-4">
+          <div className="relative border border-cream/[0.08] bg-cream/[0.015] px-3 py-4">
+            <div className="absolute left-4 top-4 bottom-4 w-px bg-cream/[0.12]" />
+            <div className="space-y-3">
+              {steps.map((s, i) => {
+                const isActive = i === active;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setActive(i)}
+                    className={`relative w-full text-left pl-6 pr-2 py-2 transition-colors ${
+                      isActive
+                        ? "bg-saffron/10 border border-saffron/45"
+                        : "border border-cream/[0.08] bg-cream/[0.02] hover:bg-cream/[0.05]"
+                    }`}
+                  >
+                    <span
+                      className={`absolute left-[10px] top-3 w-2 h-2 rounded-full ${
+                        isActive ? "bg-saffron" : "bg-cream/20"
+                      }`}
+                    />
+                    <p className="font-barlow text-[0.46rem] tracking-[0.24em] uppercase text-cream/30">{s.actor}</p>
+                    <p className={`font-courier text-[0.62rem] ${isActive ? "text-saffron" : "text-cream/60"}`}>{s.title}</p>
+                    <p className="font-courier text-[0.52rem] text-cream/35 mt-1">{s.signal}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px_140px] gap-3 border border-cream/[0.08] bg-cream/[0.015] p-4">
-          <div>
-            <p className="font-barlow text-[0.50rem] tracking-[0.24em] uppercase text-cream/25 mb-1">Current Step</p>
-            <p className="font-playfair text-[1rem] text-cream mb-1">{current.title}</p>
-            <p className="font-barlow text-[0.72rem] text-cream/48 leading-relaxed">{current.detail}</p>
-          </div>
-          <div>
-            <p className="font-barlow text-[0.50rem] tracking-[0.24em] uppercase text-cream/25 mb-1">Signal</p>
-            <p className="font-courier text-[0.66rem] text-cream/62">{current.signal}</p>
-          </div>
-          <div>
-            <p className="font-barlow text-[0.50rem] tracking-[0.24em] uppercase text-cream/25 mb-1">Latency</p>
-            <p className="font-courier text-[0.70rem] text-allow">{current.latency}</p>
+          <div className="border border-cream/[0.08] bg-cream/[0.015] p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-barlow text-[0.50rem] tracking-[0.24em] uppercase text-cream/25">Current Step</p>
+                <p className="font-playfair text-[1.1rem] text-cream mt-1">{current.title}</p>
+              </div>
+              <div className="text-right">
+                <p className="font-barlow text-[0.50rem] tracking-[0.24em] uppercase text-cream/25">Latency</p>
+                <p className="font-courier text-[0.72rem] text-allow mt-1">{current.latency}</p>
+              </div>
+            </div>
+            <p className="font-barlow text-[0.76rem] text-cream/50 leading-relaxed">{current.detail}</p>
+            <div className="flex items-center gap-3 border border-cream/[0.08] bg-cream/[0.02] px-4 py-3">
+              <div className="w-2 h-2 rounded-full bg-saffron" />
+              <div>
+                <p className="font-barlow text-[0.50rem] tracking-[0.24em] uppercase text-cream/25">Signal</p>
+                <p className="font-courier text-[0.66rem] text-cream/60">{current.signal}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1357,12 +1370,101 @@ interface GraphEdge {
   ts:      number;
 }
 
+interface DemoRow {
+  txId: string;
+  timestamp: string;
+  txType: string;
+  merchantCategory: string;
+  amount: number;
+  status: string;
+  senderBank: string;
+  receiverBank: string;
+  deviceType: string;
+  fraudFlag: number;
+  hourOfDay: number;
+  dayOfWeek: string;
+  deviceSurrogate: string;
+  corridorSurrogate: string;
+}
+
+const DEMO_DATASETS = [
+  {
+    id: "real_traffic",
+    label: "Real Traffic (200 rows)",
+    path: "/datasets/real_traffic.csv",
+    note: "Normal user traffic with mixed channels",
+  },
+  {
+    id: "synthetic_attack",
+    label: "Synthetic Attack (138 rows)",
+    path: "/datasets/synthetic_attack.csv",
+    note: "Fan-in + velocity fraud patterns",
+  },
+] as const;
+
+function parseDemoCsv(text: string): DemoRow[] {
+  const lines = text.trim().split(/\r?\n/);
+  lines.shift();
+  const rows: DemoRow[] = [];
+  for (const line of lines) {
+    const cols = line.split(",");
+    if (cols.length < 19) continue;
+    rows.push({
+      txId: cols[0],
+      timestamp: cols[1],
+      txType: cols[2],
+      merchantCategory: cols[3],
+      amount: Number(cols[4]) || 0,
+      status: cols[5],
+      senderBank: cols[9],
+      receiverBank: cols[10],
+      deviceType: cols[11],
+      fraudFlag: Number(cols[13]) || 0,
+      hourOfDay: Number(cols[14]) || 0,
+      dayOfWeek: cols[15],
+      deviceSurrogate: cols[17],
+      corridorSurrogate: cols[18],
+    });
+  }
+  return rows;
+}
+
+function normalizeDayOfWeek(input: string): number {
+  const day = input.trim().slice(0, 3).toLowerCase();
+  const map: Record<string, number> = {
+    sun: 0,
+    mon: 1,
+    tue: 2,
+    wed: 3,
+    thu: 4,
+    fri: 5,
+    sat: 6,
+  };
+  return map[day] ?? 0;
+}
+
+function bankToVpa(bank: string, surrogate: string): string {
+  const slug = bank.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const suffix = surrogate.slice(0, 6) || "demo";
+  return `${slug}.${suffix}@upi`;
+}
+
 function GraphNetworkMonitor() {
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [totalProcessed, setTotalProcessed] = useState(0);
   const [usingFallback, setUsingFallback] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [lastInjected, setLastInjected] = useState<{
+    verdict: Verdict;
+    riskScore: number;
+    traceId?: string;
+    sender: string;
+    receiver: string;
+    amount: number;
+    source: "manual" | "dataset";
+  } | null>(null);
+  const [lastEdgeId, setLastEdgeId] = useState<number | null>(null);
   const [manual, setManual] = useState({
     sender: "ravi.kumar@axisbank",
     receiver: "kirana.store@okhdfc",
@@ -1371,6 +1473,13 @@ function GraphNetworkMonitor() {
     timeOfDay: "09:00-18:00",
     newDevice: false,
   });
+  const [datasetId, setDatasetId] = useState<string>(DEMO_DATASETS[0].id);
+  const [datasetRows, setDatasetRows] = useState<DemoRow[]>([]);
+  const [datasetLoading, setDatasetLoading] = useState(false);
+  const [datasetError, setDatasetError] = useState<string | null>(null);
+  const [batchSize, setBatchSize] = useState(25);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchStats, setBatchStats] = useState({ processed: 0, total: 0, allow: 0, flag: 0, block: 0, avgRisk: 0 });
 
   const appendEdge = useCallback((edge: GraphEdge) => {
     setEdges((prev) => {
@@ -1384,6 +1493,38 @@ function GraphNetworkMonitor() {
     if (amount > 45000 && newDevice) return { verdict: "BLOCK", risk: 0.92 };
     if (amount > 18000 || newDevice || merchant === "GAMBLING") return { verdict: "FLAG", risk: 0.66 };
     return { verdict: "ALLOW", risk: 0.18 };
+  }
+
+  function buildPayloadFromDemo(row: DemoRow) {
+    const amount = Math.max(1, row.amount);
+    const fraud = row.fraudFlag === 1;
+    const senderVpa = bankToVpa(row.senderBank, row.deviceSurrogate);
+    const receiverVpa = bankToVpa(row.receiverBank, row.corridorSurrogate);
+    const amountZ = Math.max(-5, Math.min(5, (amount - 3000) / 12000));
+    return {
+      senderVpa,
+      receiverVpa,
+      amount,
+      payload: {
+        vpa: senderVpa,
+        amount,
+        merchant_category: row.merchantCategory.toUpperCase(),
+        transaction_type: "DEBIT",
+        device_type: row.deviceType.toUpperCase().includes("IOS") ? "IOS" : "ANDROID",
+        hour_of_day: row.hourOfDay,
+        day_of_week: normalizeDayOfWeek(row.dayOfWeek),
+        transactions_last_1h: fraud ? 6 : 1,
+        transactions_last_24h: fraud ? 12 : 3,
+        amount_zscore: amountZ,
+        gps_delta_km: fraud ? 18.4 : 1.2,
+        is_new_device: fraud,
+        is_new_merchant: false,
+        balance_drain_ratio: Math.min(1, amount / 100000),
+        account_age_days: 420,
+        previous_failed_attempts: fraud ? 2 : 0,
+        transfer_cashout_flag: fraud ? 1 : 0,
+      },
+    };
   }
 
   const handleInject = useCallback(async (e: any) => {
@@ -1424,9 +1565,9 @@ function GraphNetworkMonitor() {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-
+      const edgeId = Date.now();
       appendEdge({
-        id: Date.now(),
+        id: edgeId,
         from: manual.sender,
         to: manual.receiver,
         verdict: (data.verdict as Verdict) || "ALLOW",
@@ -1434,10 +1575,21 @@ function GraphNetworkMonitor() {
         amount,
         ts: Date.now(),
       });
+      setLastEdgeId(edgeId);
+      setLastInjected({
+        verdict: (data.verdict as Verdict) || "ALLOW",
+        riskScore: Number(data.risk_score ?? 0.18),
+        traceId: data.trace_id,
+        sender: manual.sender,
+        receiver: manual.receiver,
+        amount,
+        source: "manual",
+      });
     } catch {
       const fb = fallbackVerdict(amount, manual.newDevice, manual.merchantCat);
+      const edgeId = Date.now();
       appendEdge({
-        id: Date.now(),
+        id: edgeId,
         from: manual.sender,
         to: manual.receiver,
         verdict: fb.verdict,
@@ -1445,11 +1597,121 @@ function GraphNetworkMonitor() {
         amount,
         ts: Date.now(),
       });
+      setLastEdgeId(edgeId);
+      setLastInjected({
+        verdict: fb.verdict,
+        riskScore: fb.risk,
+        sender: manual.sender,
+        receiver: manual.receiver,
+        amount,
+        source: "manual",
+      });
       setManualError("Backend unreachable - injected with enterprise fallback scoring.");
     } finally {
       setSubmitting(false);
     }
   }, [appendEdge, manual, submitting]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadDataset() {
+      setDatasetLoading(true);
+      setDatasetError(null);
+      try {
+        const ds = DEMO_DATASETS.find((d) => d.id === datasetId);
+        if (!ds) throw new Error("Dataset not found");
+        const res = await fetch(ds.path);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        if (!active) return;
+        setDatasetRows(parseDemoCsv(text));
+      } catch (err) {
+        if (!active) return;
+        const msg = err instanceof Error ? err.message : "Dataset load failed";
+        setDatasetError(msg);
+        setDatasetRows([]);
+      } finally {
+        if (active) setDatasetLoading(false);
+      }
+    }
+    loadDataset();
+    return () => { active = false; };
+  }, [datasetId]);
+
+  const handleDatasetInject = useCallback(async () => {
+    if (batchRunning || datasetRows.length === 0) return;
+    setBatchRunning(true);
+    const total = Math.min(batchSize, datasetRows.length);
+    setBatchStats({ processed: 0, total, allow: 0, flag: 0, block: 0, avgRisk: 0 });
+
+    let riskSum = 0;
+    for (let i = 0; i < total; i += 1) {
+      const row = datasetRows[i];
+      const { senderVpa, receiverVpa, amount, payload } = buildPayloadFromDemo(row);
+      let verdict: Verdict = "ALLOW";
+      let risk = 0.18;
+      let traceId: string | undefined;
+
+      try {
+        const API_BASE = getApiBaseNormalized();
+        const res = await fetch(`${API_BASE}/v1/tx`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        verdict = (data.verdict as Verdict) || "ALLOW";
+        risk = Number(data.risk_score ?? 0.18);
+        traceId = data.trace_id;
+      } catch {
+        const fb = fallbackVerdict(amount, payload.is_new_device, payload.merchant_category);
+        verdict = fb.verdict;
+        risk = fb.risk;
+      }
+
+      const edgeId = Date.now() + i;
+      appendEdge({
+        id: edgeId,
+        from: senderVpa,
+        to: receiverVpa,
+        verdict,
+        riskScore: risk,
+        amount,
+        ts: Date.now(),
+      });
+      setLastEdgeId(edgeId);
+      setLastInjected({
+        verdict,
+        riskScore: risk,
+        traceId,
+        sender: senderVpa,
+        receiver: receiverVpa,
+        amount,
+        source: "dataset",
+      });
+
+      riskSum += risk;
+      setBatchStats((prev) => {
+        const allow = prev.allow + (verdict === "ALLOW" ? 1 : 0);
+        const flag = prev.flag + (verdict === "FLAG" ? 1 : 0);
+        const block = prev.block + (verdict === "BLOCK" ? 1 : 0);
+        const processed = prev.processed + 1;
+        return {
+          processed,
+          total,
+          allow,
+          flag,
+          block,
+          avgRisk: riskSum / processed,
+        };
+      });
+
+      await new Promise((r) => setTimeout(r, 180));
+    }
+
+    setBatchRunning(false);
+  }, [appendEdge, batchRunning, batchSize, datasetRows]);
 
   // Seed initial edges
   useEffect(() => {
@@ -1592,6 +1854,129 @@ function GraphNetworkMonitor() {
         {manualError && <p className="md:col-span-6 font-courier text-[0.56rem] text-flag/80">{manualError}</p>}
       </form>
 
+      {lastInjected && (
+        <div className="px-4 py-3 border-b border-cream/[0.06] bg-cream/[0.012]">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-barlow text-[0.50rem] tracking-[0.22em] uppercase text-cream/30">Last Injected</span>
+            <span className={`font-courier text-[0.70rem] ${lastInjected.verdict === "ALLOW" ? "text-allow" : lastInjected.verdict === "BLOCK" ? "text-block" : "text-flag"}`}>
+              {lastInjected.verdict}
+            </span>
+            <span className="font-courier text-[0.62rem] text-cream/55">Risk {lastInjected.riskScore.toFixed(2)}</span>
+            <span className="font-courier text-[0.58rem] text-cream/35">
+              {lastInjected.sender} → {lastInjected.receiver} · ₹{Math.round(lastInjected.amount)}
+            </span>
+            {lastInjected.traceId && (
+              <span className="font-courier text-[0.52rem] text-cream/30">Trace {lastInjected.traceId}</span>
+            )}
+            <span className="ml-auto font-barlow text-[0.48rem] tracking-[0.20em] uppercase text-cream/22">
+              Source · {lastInjected.source}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className="px-4 py-4 border-b border-cream/[0.06] bg-cream/[0.01]">
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <span className="font-barlow text-[0.52rem] tracking-[0.26em] uppercase text-cream/30">Demo Datasets</span>
+          <select
+            value={datasetId}
+            onChange={(e) => setDatasetId(e.target.value)}
+            className="bg-cream/[0.02] border border-cream/[0.12] px-2 py-1.5 font-courier text-[0.6rem] text-cream/70"
+          >
+            {DEMO_DATASETS.map((ds) => (
+              <option key={ds.id} value={ds.id}>
+                {ds.label}
+              </option>
+            ))}
+          </select>
+          <span className="font-courier text-[0.56rem] text-cream/35">
+            {datasetLoading ? "Loading..." : `${datasetRows.length} rows loaded`}
+          </span>
+          {datasetError && <span className="font-courier text-[0.56rem] text-flag/80">{datasetError}</span>}
+          <span className="ml-auto font-barlow text-[0.48rem] tracking-[0.20em] uppercase text-cream/20">
+            {DEMO_DATASETS.find((d) => d.id === datasetId)?.note}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_220px] gap-4">
+          <div className="border border-cream/[0.08] bg-cream/[0.015]">
+            <div className="px-3 py-2 border-b border-cream/[0.06]">
+              <span className="font-barlow text-[0.50rem] tracking-[0.24em] uppercase text-cream/25">Preview</span>
+            </div>
+            <div className="grid grid-cols-4 gap-px bg-cream/[0.06]">
+              {(datasetRows.length ? datasetRows.slice(0, 6) : []).map((row) => (
+                <div key={row.txId} className="contents">
+                  <div className="bg-ink/60 px-3 py-2">
+                    <p className="font-courier text-[0.55rem] text-cream/60">{row.txId}</p>
+                  </div>
+                  <div className="bg-ink/60 px-3 py-2">
+                    <p className="font-courier text-[0.55rem] text-cream/55">{row.merchantCategory}</p>
+                  </div>
+                  <div className="bg-ink/60 px-3 py-2">
+                    <p className="font-courier text-[0.55rem] text-cream/55">₹{row.amount}</p>
+                  </div>
+                  <div className="bg-ink/60 px-3 py-2">
+                    <p className={`font-courier text-[0.55rem] ${row.fraudFlag ? "text-flag" : "text-allow"}`}>
+                      {row.fraudFlag ? "FRAUD" : "NORMAL"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="border border-cream/[0.08] bg-cream/[0.015] p-3">
+              <p className="font-barlow text-[0.48rem] tracking-[0.24em] uppercase text-cream/25 mb-2">Batch Inject</p>
+              <input
+                type="number"
+                min="1"
+                max="200"
+                value={batchSize}
+                onChange={(e) => setBatchSize(Math.max(1, Number(e.target.value) || 1))}
+                className="w-full bg-cream/[0.02] border border-cream/[0.12] px-2 py-2 font-courier text-[0.62rem] text-cream/70"
+              />
+              <button
+                type="button"
+                onClick={handleDatasetInject}
+                disabled={batchRunning || datasetLoading || datasetRows.length === 0}
+                className="mt-2 w-full bg-allow/90 hover:bg-allow disabled:opacity-60 text-ink font-barlow text-[0.60rem] tracking-[0.18em] uppercase px-3 py-2"
+              >
+                {batchRunning ? "Injecting..." : "Inject Dataset"}
+              </button>
+            </div>
+
+            <div className="border border-cream/[0.08] bg-cream/[0.015] p-3">
+              <p className="font-barlow text-[0.48rem] tracking-[0.24em] uppercase text-cream/25 mb-2">Batch Results</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-barlow text-[0.54rem] text-cream/35">Processed</span>
+                  <span className="font-courier text-[0.6rem] text-cream/60">
+                    {batchStats.processed}/{batchStats.total}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-barlow text-[0.54rem] text-cream/35">ALLOW</span>
+                  <span className="font-courier text-[0.6rem] text-allow">{batchStats.allow}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-barlow text-[0.54rem] text-cream/35">FLAG</span>
+                  <span className="font-courier text-[0.6rem] text-flag">{batchStats.flag}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-barlow text-[0.54rem] text-cream/35">BLOCK</span>
+                  <span className="font-courier text-[0.6rem] text-block">{batchStats.block}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-barlow text-[0.54rem] text-cream/35">Avg Risk</span>
+                  <span className="font-courier text-[0.6rem] text-cream/60">{batchStats.avgRisk.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* SVG Bipartite Graph */}
       <div className="p-5">
         <svg
@@ -1615,14 +2000,15 @@ function GraphNetworkMonitor() {
             const x2 = receiverX - 7; const y2 = nodeY(ti, receivers.length);
             const cx = (x1 + x2) / 2;
             const opacity = Math.max(0.07, 0.75 - i * 0.028);
+            const isHot = edge.id === lastEdgeId;
             return (
               <path
                 key={edge.id}
                 d={`M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`}
                 stroke={edgeColor(edge.verdict)}
-                strokeWidth={edge.verdict === "BLOCK" ? 2.5 : 1}
+                strokeWidth={isHot ? 3 : edge.verdict === "BLOCK" ? 2.5 : 1}
                 fill="none"
-                opacity={opacity}
+                opacity={isHot ? 0.95 : opacity}
               />
             );
           })}

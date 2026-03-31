@@ -47,6 +47,9 @@ outputs/metrics/*.json
 *.csv
 *.feather
 
+# Allow demo datasets for frontend showcase
+!frontend/public/datasets/*.csv
+
 # Logs
 *.log
 logs/
