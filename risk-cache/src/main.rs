@@ -485,7 +485,13 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     // ── Load config from feature_manifest.json + bank_risk_policy.json ─────
-    let config = PolicyConfig::load().map_err(|e| std::io::Error::other(e))?;
+    let config = match PolicyConfig::load() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("startup_config_load_failed: {}", e);
+            return Err(std::io::Error::other(e));
+        }
+    };
 
     if config.is_production {
         let mut missing = Vec::new();
@@ -517,7 +523,13 @@ async fn main() -> std::io::Result<()> {
     );
 
     // ── Load ONNX models ───────────────────────────────────────────────────
-    let models = ModelSessions::load(&config).map_err(|e| std::io::Error::other(e))?;
+    let models = match ModelSessions::load(&config) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("startup_model_load_failed: {}", e);
+            return Err(std::io::Error::other(e));
+        }
+    };
 
     info!(
         "models_loaded lgbm={} if={}",
@@ -545,7 +557,7 @@ async fn main() -> std::io::Result<()> {
 
     info!("binding addr={}", bind_addr);
 
-    HttpServer::new(move || {
+    let server = HttpServer::new(move || {
         let mut app = App::new()
             .app_data(state.clone())
             .route("/health", web::get().to(health))
@@ -564,7 +576,20 @@ async fn main() -> std::io::Result<()> {
 
         app
     })
-    .bind(&bind_addr)?
-    .run()
-    .await
+    .bind(&bind_addr);
+
+    let server = match server {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("startup_bind_failed addr={} err={}", bind_addr, e);
+            return Err(e);
+        }
+    };
+
+    if let Err(e) = server.run().await {
+        eprintln!("startup_server_run_failed: {}", e);
+        return Err(e);
+    }
+
+    Ok(())
 }
