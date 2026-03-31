@@ -30,7 +30,7 @@ FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
-    libssl3 ca-certificates curl \
+    libssl3 ca-certificates curl libstdc++6 libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Download ONNX Runtime shared library (ort crate load-dynamic feature resolves at runtime)
