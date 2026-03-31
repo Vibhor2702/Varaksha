@@ -150,10 +150,64 @@ const MILESTONES: Milestone[] = [
   },
   {
     date:  "Mar 11",
-    title: "Finalisation and Deployment",
+    title: "V1 Finalisation and Deployment",
     quote: "A deployable system is defined by finishing details—texture, colour, and interactive feedback.",
     body:  "Frontend polish: dot-grid body texture, surface-gradient card utility, amber token separated from saffron for distinct FLAG verdict rendering. Next.js static export deployed to Cloudflare Pages. Core pipeline hardened and ready for production integration.",
     tags:  ["Next.js 15", "Static Export", "Polish", "Production-Ready"],
+    owner: "both",
+    Icon:  Rocket,
+  },
+  {
+    date:  "Mar 12–14",
+    title: "Gateway Hardening — Rate Limiting & Auth",
+    quote: "A gateway without rate limiting is a door without a lock.",
+    body:  "Production-grade security hardening: per-VPA rate limiter enforcing NPCI OC-215/2025-26 caps (100 req/24h), mTLS mutual authentication layer, HMAC-SHA256 webhook signing for all graph agent push events, and audit log ring-buffer in DashMap. CORS policy tightened to allowlist PSP bank origins only.",
+    tags:  ["Rate Limiter", "mTLS", "HMAC-SHA256", "CORS", "Audit Log"],
+    owner: "sec",
+    Icon:  ShieldPlus,
+  },
+  {
+    date:  "Mar 14–16",
+    title: "LightGBM Secondary Model & Feature Expansion",
+    quote: "The ensemble gap that justified removing XGBoost does not apply to a gradient-boosted lightweight.",
+    body:  "LightGBM trained as a secondary scorer on the 111K-row corpus. Feature set expanded to 18 variables, adding merchant_risk_freq and amount_log. Both models exported to ONNX; inference pipeline updated to fuse RF and LightGBM scores via weighted average (0.7 / 0.3). Sweep artifacts saved as lgbm_sweeper.onnx.",
+    tags:  ["LightGBM", "18 features", "ONNX fusion", "Weighted 0.7/0.3"],
+    owner: "ml",
+    Icon:  BrainCircuit,
+  },
+  {
+    date:  "Mar 17–19",
+    title: "Three-Tier Deployment Architecture",
+    quote: "Cloud, enterprise, and edge are not three products — they are one system at three integration depths.",
+    body:  "Formalised the three-tier deployment model: Cloud (hosted Rust gateway on Railway + Cloudflare Pages), Enterprise (API-first with HMAC webhooks, graph topology streaming, PSP bank integration), Embedded SDK (quantized ONNX < 5MB, ONNX Runtime Mobile, zero round-trip on-device scoring). Each tier shares the same model artefacts and scoring logic.",
+    tags:  ["Cloud Tier", "Enterprise API", "Embedded SDK", "ONNX Mobile"],
+    owner: "both",
+    Icon:  Globe,
+  },
+  {
+    date:  "Mar 20–22",
+    title: "IsolationForest Calibration & Sweep",
+    quote: "An anomaly detector miscalibrated at 5% contamination flags legitimate high-value merchants every hour.",
+    body:  "IsolationForest contamination tuned from 5% to 2% after simulation revealed excessive false positives on recurring high-value UTILITY payments. Bayesian sweep across n_estimators (100–400) and max_samples: optimal 300 trees, 256 max_samples. False positive rate halved without recall loss. Saved as isolation_forest.onnx v2.",
+    tags:  ["Contamination 2%", "Bayesian sweep", "FP reduction", "v2"],
+    owner: "ml",
+    Icon:  Zap,
+  },
+  {
+    date:  "Mar 24–28",
+    title: "Graph Agent Streaming & Consortium Layer",
+    quote: "Batch topology analysis finds yesterday's mules. Streaming graph analytics finds today's.",
+    body:  "Graph agent migrated from batch NetworkX snapshots to event-driven incremental updates: each transaction edge appended and fan-out/fan-in/cycle metrics recomputed in O(k) per event. Consortium risk-sharing prototype implemented: anonymised score deltas federated via HMAC-signed shared registry — zero PII exposure.",
+    tags:  ["Streaming graph", "Incremental O(k)", "Consortium", "No PII"],
+    owner: "sec",
+    Icon:  Network,
+  },
+  {
+    date:  "Mar 29–31",
+    title: "V2 Three-Tier Launch",
+    quote: "One codebase. Three deployment surfaces. One fraud intelligence system.",
+    body:  "Varaksha V2 deployed across all three tiers. Cloud: Rust gateway on Railway + Cloudflare Pages CDN, live SSE stream, <10ms P99. Enterprise: graph topology network monitor, SecurityArena attack simulations, webhook delivery. Embedded SDK: on-device ONNX scoring simulation. All tiers share model artefacts from the 111K-row corpus.",
+    tags:  ["V2 Launch", "All Three Tiers", "Cloudflare", "Railway", "Live"],
     owner: "both",
     Icon:  Rocket,
   },
@@ -174,7 +228,7 @@ const STORYBOARD = [
   {
     num:   "03",
     label: "The Outcome",
-    body:  "85.24% detection accuracy. ROC-AUC 0.9546. Sub-5ms P99 gateway latency. Four BIS money-mule typologies detected autonomously. Fraud alerts in 8 Indian languages, with legal citations embedded. Recall 0.9229 — catches 92 in every 100 fraud transactions. Built, trained, and deployed to global edge in 12 days.",
+    body:  "96.52% RF accuracy, 0.9952 ROC-AUC (LightGBM fusion). Sub-10ms P99 gateway latency. Four BIS money-mule typologies detected via streaming graph. Fraud alerts in 8 Indian languages. Three deployment tiers: Cloud (Railway), Enterprise (API + graph), Embedded SDK (ONNX Mobile). Built and deployed in 32 days.",
   },
 ];
 
@@ -423,7 +477,7 @@ export default function TimelinePage() {
             display: "inline-block",
           }}
         >
-          Feb 28 &ndash; Mar 11, 2026 &middot; 11 days
+          Feb 28 &ndash; Mar 31, 2026 &middot; 32 days &middot; V2
         </motion.p>
 
         <motion.h1
@@ -694,7 +748,7 @@ export default function TimelinePage() {
             color: "transparent",
           }}
         >
-          11 days &middot; 2 people &middot; shipped.
+          32 days &middot; 2 people &middot; 3 tiers &middot; shipped.
         </p>
       </motion.div>
 

@@ -742,6 +742,137 @@ export default function FlowPage() {
         )}
       </AnimatePresence>
 
+      {/* ── Deployment Tiers section ────────────────────────────────── */}
+      <section className="px-6 lg:px-12 py-16 max-w-7xl mx-auto border-t border-ink/[0.07] mt-8">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.55 }}
+          className="mb-10"
+        >
+          <p className="font-barlow text-[0.62rem] tracking-[0.36em] uppercase text-saffron mb-3">
+            Deployment Model
+          </p>
+          <h2
+            className="font-playfair font-bold text-ink leading-tight mb-3"
+            style={{ fontSize: "clamp(1.6rem, 3.5vw, 2.6rem)" }}
+          >
+            The Same Pipeline.<br />Three Integration Depths.
+          </h2>
+          <p className="font-barlow text-[0.80rem] text-ink/55 max-w-lg leading-relaxed">
+            Every Varaksha deployment tier shares identical model artefacts, feature engineering, and scoring logic.
+            The tier determines where inference runs and how results are consumed.
+          </p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            {
+              tier:    "Cloud",
+              label:   "T1",
+              accent:  "#2563EB",
+              badge:   "Live · Railway API",
+              headline: "Hosted SOC Dashboard",
+              desc:    "The Rust gateway runs on Railway. The React dashboard streams verdicts via SSE from the live backend. ONNX inference happens server-side in <10ms P99. Suitable for PSPs that want zero infrastructure overhead — point your webhooks at the hosted endpoint.",
+              specs: [
+                "Rust gateway on Railway",
+                "Cloudflare Pages CDN frontend",
+                "SSE live transaction stream",
+                "ONNX Runtime server-side",
+                "POST /v1/tx REST API",
+              ],
+              href: "/live",
+              cta:  "Open Live Demo →",
+            },
+            {
+              tier:    "Enterprise",
+              label:   "T2",
+              accent:  "#0D7A5F",
+              badge:   "Live · Graph Engine",
+              headline: "API-First + Graph Topology",
+              desc:    "PSP banks integrate via mTLS-protected REST API. The graph agent pushes HMAC-SHA256-signed webhook bundles on every FLAG or BLOCK verdict. NetworkX topology monitor exposes fan-out, fan-in, and cycle metrics per VPA partition. Full DPDP §7(g) audit trail per verdict.",
+              specs: [
+                "mTLS mutual authentication",
+                "HMAC-SHA256 signed webhooks",
+                "NetworkX streaming topology",
+                "Per-VPA NPCI OC-215 rate limits",
+                "JSON audit log export",
+              ],
+              href: "/live",
+              cta:  "View Enterprise Tier →",
+            },
+            {
+              tier:    "Embedded SDK",
+              label:   "T3",
+              accent:  "#D97706",
+              badge:   "Simulation",
+              headline: "On-Device Pre-Network Gate",
+              desc:    "The quantized ONNX model (<5MB) ships inside iOS and Android UPI apps via ONNX Runtime Mobile. Fraud is scored locally before the transaction touches any network stack — zero round-trip latency, works fully offline. The simulation runs in your browser.",
+              specs: [
+                "Quantized ONNX < 5MB bundle",
+                "ONNX Runtime Mobile (C++)",
+                "Zero network round-trip",
+                "Offline-capable scoring",
+                "JNI/Swift native bridge",
+              ],
+              href: "/live",
+              cta:  "View Embedded Sim →",
+            },
+          ].map((t, i) => (
+            <motion.div
+              key={t.tier}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-30px" }}
+              transition={{ delay: i * 0.1, duration: 0.5, ease: "easeOut" }}
+              className="border border-ink/[0.09] bg-white/30 backdrop-blur-sm flex flex-col"
+            >
+              {/* Accent top bar */}
+              <div className="h-[2px]" style={{ backgroundColor: t.accent }} />
+
+              <div className="p-6 flex flex-col flex-1">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-courier text-[0.50rem] font-bold" style={{ color: t.accent }}>{t.label}</span>
+                      <span className="font-barlow text-[0.44rem] tracking-widest uppercase px-1.5 py-0.5 border" style={{ color: t.accent, borderColor: `${t.accent}30`, backgroundColor: `${t.accent}08` }}>{t.badge}</span>
+                    </div>
+                    <h3 className="font-barlow text-[0.62rem] tracking-[0.22em] uppercase text-ink/40 font-semibold">{t.tier}</h3>
+                  </div>
+                  <span className="font-playfair font-bold text-[2rem] leading-none" style={{ color: `${t.accent}18` }}>{t.label}</span>
+                </div>
+
+                <h4 className="font-playfair font-bold text-ink text-[1.05rem] leading-snug mb-3">{t.headline}</h4>
+                <p className="font-barlow text-[0.74rem] text-ink/55 leading-relaxed mb-5">{t.desc}</p>
+
+                {/* Spec list */}
+                <ul className="space-y-1.5 mb-6 flex-1">
+                  {t.specs.map((s) => (
+                    <li key={s} className="flex items-start gap-2">
+                      <span className="mt-1 w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: t.accent }} />
+                      <span className="font-courier text-[0.60rem] text-ink/45">{s}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* CTA */}
+                <a
+                  href={t.href}
+                  className="inline-flex items-center gap-2 font-barlow text-[0.60rem] tracking-[0.18em] uppercase px-4 py-2 border transition-colors duration-200 hover:text-cream"
+                  style={{ borderColor: `${t.accent}40`, color: t.accent }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = t.accent; (e.currentTarget as HTMLAnchorElement).style.color = "#F0F4F8"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLAnchorElement).style.color = t.accent; }}
+                >
+                  {t.cta}
+                </a>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
       {/* ── Footer ─────────────────────────────────────────────────────── */}
       <footer className="border-t border-ink/10 px-6 lg:px-12 py-4">
         <div className="max-w-7xl mx-auto flex justify-between items-center gap-2">

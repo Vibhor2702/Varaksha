@@ -1,4 +1,4 @@
-﻿{
+{
   "feature_cols": [
     "amount",
     "hour_of_day",
@@ -125982,4 +125982,3 @@
     ]
   }
 }
-

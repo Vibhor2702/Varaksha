@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { CacheVisualizer } from "./CacheVisualizer";
 import { SecurityArena   } from "./SecurityArena";
 import { LegalReport     } from "./LegalReport";
+import { Tier3EdgeSim    } from "../components/Tier3EdgeSim";
 import { getApiBaseNormalized } from "../lib/api-config";
+
+// ── Tier type ─────────────────────────────────────────────────────────────────
+type Tier = "cloud" | "enterprise" | "embedded";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -286,6 +290,27 @@ function IntelSandbox() {
             "Real ONNX inference via Railway API",
           ],
         });
+
+        if (typeof window !== "undefined" && (apiResult.verdict === "FLAG" || apiResult.verdict === "BLOCK")) {
+          window.dispatchEvent(new CustomEvent("varaksha:incident", {
+            detail: {
+              transactionId: String(apiResult.trace_id ?? `TXN-${Date.now()}`),
+              senderVpa: form.senderVpa,
+              receiverVpa: form.receiverVpa,
+              amount,
+              timestampIso: new Date().toISOString(),
+              merchantCat: form.merchantCat,
+              verdict: apiResult.verdict,
+              riskScore: Number(apiResult.risk_score ?? 0),
+              graphReason: apiResult.graph_reason ?? null,
+              reasons: [
+                `API verdict=${apiResult.verdict}`,
+                `Trace ID: ${apiResult.trace_id}`,
+                "Captured from real-time sandbox inference",
+              ],
+            },
+          }));
+        }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         const API_BASE = getApiBaseNormalized();
@@ -689,6 +714,26 @@ function TransactionFeed() {
             latencyMs: 4,
           };
 
+          if (typeof window !== "undefined" && (row.verdict === "FLAG" || row.verdict === "BLOCK")) {
+            window.dispatchEvent(new CustomEvent("varaksha:incident", {
+              detail: {
+                transactionId: `FEED-${row.id}`,
+                senderVpa: row.sender,
+                receiverVpa: row.receiver,
+                amount: row.amount,
+                timestampIso: new Date().toISOString(),
+                merchantCat: row.merchantCat,
+                verdict: row.verdict,
+                riskScore: row.riskScore,
+                reasons: [
+                  "Captured from live transaction feed",
+                  `Category=${row.merchantCat}`,
+                  `Risk=${row.riskScore.toFixed(2)}`,
+                ],
+              },
+            }));
+          }
+
           setRows((prev) => {
             const next = [row, ...prev];
             return next.length > FEED_MAX_ROWS ? next.slice(0, FEED_MAX_ROWS) : next;
@@ -736,6 +781,27 @@ function TransactionFeed() {
     const timer = setInterval(() => {
       if (pausedRef.current) return;
       const row = nextFeedRow();
+
+      if (typeof window !== "undefined" && (row.verdict === "FLAG" || row.verdict === "BLOCK")) {
+        window.dispatchEvent(new CustomEvent("varaksha:incident", {
+          detail: {
+            transactionId: `FEED-${row.id}`,
+            senderVpa: row.sender,
+            receiverVpa: row.receiver,
+            amount: row.amount,
+            timestampIso: new Date().toISOString(),
+            merchantCat: row.merchantCat,
+            verdict: row.verdict,
+            riskScore: row.riskScore,
+            reasons: [
+              "Captured from fallback feed generator",
+              `Category=${row.merchantCat}`,
+              `Risk=${row.riskScore.toFixed(2)}`,
+            ],
+          },
+        }));
+      }
+
       setRows((prev) => {
         const next = [row, ...prev];
         return next.length > FEED_MAX_ROWS ? next.slice(0, FEED_MAX_ROWS) : next;
@@ -1092,10 +1158,604 @@ function MLModelModule() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// MODULE G — ENTERPRISE GRAPH NETWORK MONITOR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface GraphEdge {
+  id:      number;
+  from:    string;
+  to:      string;
+  verdict: Verdict;
+  amount:  number;
+  ts:      number;
+}
+
+function GraphNetworkMonitor() {
+  const [edges, setEdges] = useState<GraphEdge[]>([]);
+  const [totalProcessed, setTotalProcessed] = useState(0);
+  const [usingFallback, setUsingFallback] = useState(false);
+
+  // Seed initial edges
+  useEffect(() => {
+    const seed: GraphEdge[] = [];
+    for (let i = 0; i < 12; i++) {
+      const row = nextFeedRow();
+      seed.push({ id: i, from: row.sender, to: row.receiver, verdict: row.verdict, amount: row.amount, ts: Date.now() - (12 - i) * 2200 });
+    }
+    setEdges(seed);
+    setTotalProcessed(seed.length);
+  }, []);
+
+  // Connect to live SSE stream
+  useEffect(() => {
+    let es: EventSource | null = null;
+    function connect() {
+      const API_BASE = getApiBaseNormalized();
+      es = new EventSource(`${API_BASE}/v1/stream`);
+      es.onmessage = (e) => {
+        try {
+          const tx: StreamTx = JSON.parse(e.data);
+          const edge: GraphEdge = { id: Date.now(), from: tx.sender, to: tx.receiver, verdict: tx.verdict, amount: tx.amount, ts: Date.now() };
+          setEdges((prev) => { const next = [edge, ...prev]; return next.length > 30 ? next.slice(0, 30) : next; });
+          setTotalProcessed((p) => p + 1);
+        } catch { /* ignore */ }
+      };
+      es.onerror = () => { setUsingFallback(true); es?.close(); es = null; };
+    }
+    connect();
+    return () => es?.close();
+  }, []);
+
+  // Deterministic fallback when backend offline
+  useEffect(() => {
+    if (!usingFallback) return;
+    const timer = setInterval(() => {
+      const row = nextFeedRow();
+      setEdges((prev) => {
+        const edge: GraphEdge = { id: Date.now(), from: row.sender, to: row.receiver, verdict: row.verdict, amount: row.amount, ts: Date.now() };
+        const next = [edge, ...prev];
+        return next.length > 30 ? next.slice(0, 30) : next;
+      });
+      setTotalProcessed((p) => p + 1);
+    }, FEED_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [usingFallback]);
+
+  // Extract unique sender/receiver nodes (up to 8 each)
+  const senders = useMemo(() => {
+    const seen = new Set<string>(); const result: string[] = [];
+    for (const e of edges) { if (!seen.has(e.from)) { seen.add(e.from); result.push(e.from); } if (result.length >= 8) break; }
+    return result;
+  }, [edges]);
+
+  const receivers = useMemo(() => {
+    const seen = new Set<string>(); const result: string[] = [];
+    for (const e of edges) { if (!seen.has(e.to)) { seen.add(e.to); result.push(e.to); } if (result.length >= 8) break; }
+    return result;
+  }, [edges]);
+
+  const W = 680; const H = 400;
+  const senderX = 130; const receiverX = W - 130;
+
+  function nodeY(index: number, total: number): number {
+    if (total <= 1) return H / 2;
+    return 45 + (index * (H - 90)) / (total - 1);
+  }
+
+  function edgeColor(v: Verdict): string {
+    if (v === "BLOCK") return "#C0392B";
+    if (v === "FLAG")  return "#D97706";
+    return "#0D7A5F";
+  }
+
+  const visibleEdges = edges.slice(0, 25);
+
+  // Aggregate stats
+  const graphStats = useMemo(() => {
+    const flagged = edges.filter((e) => e.verdict === "FLAG" || e.verdict === "BLOCK");
+    const uniqueNodes = new Set([...edges.map((e) => e.from), ...edges.map((e) => e.to)]).size;
+    const blocked = edges.filter((e) => e.verdict === "BLOCK");
+    return { flagged: flagged.length, uniqueNodes, blocked: blocked.length };
+  }, [edges]);
+
+  return (
+    <section className="border border-cream/[0.08] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-cream/[0.07] bg-cream/[0.025]">
+        <div className="flex items-center gap-2.5">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-allow animate-pulse" />
+          <span className="font-barlow text-[0.57rem] tracking-[0.30em] uppercase text-cream/40">
+            Module G &mdash; Transaction Network Graph
+          </span>
+        </div>
+        <span className="font-courier text-[0.52rem] text-cream/18">
+          {totalProcessed} edges &middot; {usingFallback ? "simulated" : "live"}
+        </span>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-3 divide-x divide-cream/[0.06] border-b border-cream/[0.06]">
+        {[
+          { label: "Active VPAs",    value: graphStats.uniqueNodes.toString()  },
+          { label: "Flagged Flows",  value: graphStats.flagged.toString()       },
+          { label: "Blocked Nodes",  value: graphStats.blocked.toString()       },
+        ].map((s) => (
+          <div key={s.label} className="px-5 py-3 flex flex-col gap-0.5">
+            <span className="font-barlow text-[0.48rem] tracking-[0.24em] uppercase text-cream/22">{s.label}</span>
+            <span className="font-courier text-[1.2rem] font-bold text-cream/70">{s.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* SVG Bipartite Graph */}
+      <div className="p-5">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full"
+          style={{ maxHeight: 380, background: "rgba(240,244,248,0.015)", border: "1px solid rgba(240,244,248,0.06)" }}
+        >
+          {/* Column labels */}
+          <text x={senderX} y={22} textAnchor="middle" fill="rgba(240,244,248,0.25)" fontSize={8} fontFamily="monospace" letterSpacing="2">SENDERS</text>
+          <text x={receiverX} y={22} textAnchor="middle" fill="rgba(240,244,248,0.25)" fontSize={8} fontFamily="monospace" letterSpacing="2">RECEIVERS</text>
+
+          {/* Center divider */}
+          <line x1={W / 2} y1={30} x2={W / 2} y2={H - 10} stroke="rgba(240,244,248,0.04)" strokeWidth={1} strokeDasharray="4 4" />
+
+          {/* Edges */}
+          {visibleEdges.map((edge, i) => {
+            const fi = senders.indexOf(edge.from);
+            const ti = receivers.indexOf(edge.to);
+            if (fi === -1 || ti === -1) return null;
+            const x1 = senderX + 7; const y1 = nodeY(fi, senders.length);
+            const x2 = receiverX - 7; const y2 = nodeY(ti, receivers.length);
+            const cx = (x1 + x2) / 2;
+            const opacity = Math.max(0.07, 0.75 - i * 0.028);
+            return (
+              <path
+                key={edge.id}
+                d={`M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`}
+                stroke={edgeColor(edge.verdict)}
+                strokeWidth={edge.verdict === "BLOCK" ? 2.5 : 1}
+                fill="none"
+                opacity={opacity}
+              />
+            );
+          })}
+
+          {/* Sender nodes */}
+          {senders.map((vpa, i) => {
+            const y = nodeY(i, senders.length);
+            const hasBlock = edges.some((e) => e.from === vpa && e.verdict === "BLOCK");
+            const hasFlag  = edges.some((e) => e.from === vpa && e.verdict === "FLAG");
+            const color = hasBlock ? "#C0392B" : hasFlag ? "#D97706" : "#0D7A5F";
+            return (
+              <g key={vpa}>
+                <circle cx={senderX} cy={y} r={7} fill={`${color}20`} stroke={color} strokeWidth={1.5} />
+                <text x={senderX - 12} y={y + 4} textAnchor="end" fill="rgba(240,244,248,0.50)" fontSize={7.5} fontFamily="monospace">
+                  {maskVpa(vpa).slice(0, 20)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Receiver nodes */}
+          {receivers.map((vpa, i) => {
+            const y = nodeY(i, receivers.length);
+            const hasBlock = edges.some((e) => e.to === vpa && e.verdict === "BLOCK");
+            const hasFlag  = edges.some((e) => e.to === vpa && e.verdict === "FLAG");
+            const color = hasBlock ? "#C0392B" : hasFlag ? "#D97706" : "#0D7A5F";
+            return (
+              <g key={vpa}>
+                <circle cx={receiverX} cy={y} r={7} fill={`${color}20`} stroke={color} strokeWidth={1.5} />
+                <text x={receiverX + 12} y={y + 4} textAnchor="start" fill="rgba(240,244,248,0.50)" fontSize={7.5} fontFamily="monospace">
+                  {maskVpa(vpa).slice(0, 20)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Legend + source badge */}
+        <div className="flex items-center gap-5 mt-3 flex-wrap">
+          {[
+            { label: "ALLOW", color: "#0D7A5F" },
+            { label: "FLAG",  color: "#D97706" },
+            { label: "BLOCK", color: "#C0392B" },
+          ].map(({ label, color }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <div className="w-5 h-px" style={{ backgroundColor: color }} />
+              <span className="font-courier text-[0.54rem] text-cream/30">{label}</span>
+            </div>
+          ))}
+          <span className="ml-auto font-barlow text-[0.50rem] tracking-widest uppercase text-cream/18">
+            {usingFallback ? "Fallback · Backend offline" : "Live · Railway API"}
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Embedded Tier panel ───────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODULE H — OPEN BANKING FEED  (Setu AA · Plaid)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface OBRow {
+  id:        number;
+  ts:        string;
+  source:    "setu" | "plaid";
+  sender:    string;
+  receiver:  string;
+  amount:    number;
+  currency:  string;
+  category:  string;
+  verdict:   Verdict;
+  riskScore: number;
+  latencyMs: number;
+}
+
+// Synthetic fallback pool — realistic Indian (Setu) + International (Plaid) txns
+const OB_FALLBACK: Omit<OBRow, "id" | "ts">[] = [
+  { source:"setu",  sender:"ravi.kumar@axisbank",       receiver:"swiggy.merchant@icici",   amount:349,    currency:"INR", category:"FOOD",     verdict:"ALLOW", riskScore:0.11, latencyMs:6 },
+  { source:"plaid", sender:"john.doe@chase",             receiver:"mcdonalds.pay@visa",      amount:12.50,  currency:"USD", category:"FOOD",     verdict:"ALLOW", riskScore:0.09, latencyMs:5 },
+  { source:"setu",  sender:"priya.sharma@okicici",      receiver:"electricity.board@okhdfc",amount:1800,   currency:"INR", category:"UTILITY",  verdict:"ALLOW", riskScore:0.14, latencyMs:7 },
+  { source:"plaid", sender:"jane.smith@bankofamerica",  receiver:"wholefds.market@visa",    amount:87.30,  currency:"USD", category:"ECOM",     verdict:"ALLOW", riskScore:0.12, latencyMs:5 },
+  { source:"setu",  sender:"suresh.patel@ybl",          receiver:"irctc.booking@ybl",       amount:2450,   currency:"INR", category:"TRAVEL",   verdict:"ALLOW", riskScore:0.18, latencyMs:6 },
+  { source:"plaid", sender:"mike.johnson@wells",        receiver:"crypto.exchange@wire",    amount:4980,   currency:"USD", category:"GAMBLING", verdict:"BLOCK", riskScore:0.91, latencyMs:4 },
+  { source:"setu",  sender:"cash.agent.77@YESB",       receiver:"wallet.agent1@paytm",     amount:45000,  currency:"INR", category:"UTILITY",  verdict:"BLOCK", riskScore:0.93, latencyMs:5 },
+  { source:"setu",  sender:"mohan.verma@okhdfc",        receiver:"zomato.pay@okicici",      amount:520,    currency:"INR", category:"FOOD",     verdict:"ALLOW", riskScore:0.10, latencyMs:7 },
+  { source:"plaid", sender:"sarah.lee@citibank",        receiver:"draftkings.bet@ach",      amount:500,    currency:"USD", category:"GAMBLING", verdict:"FLAG",  riskScore:0.67, latencyMs:6 },
+  { source:"setu",  sender:"wallet.agent1@paytm",      receiver:"wallet.agent2@paytm",     amount:9999,   currency:"INR", category:"ECOM",     verdict:"FLAG",  riskScore:0.72, latencyMs:5 },
+  { source:"plaid", sender:"alex.brown@usbank",         receiver:"amazon.pay@visa",         amount:149.99, currency:"USD", category:"ECOM",     verdict:"ALLOW", riskScore:0.08, latencyMs:5 },
+  { source:"setu",  sender:"kavitha.n@paytm",           receiver:"pharmacy.care@ybl",       amount:640,    currency:"INR", category:"UTILITY",  verdict:"ALLOW", riskScore:0.13, latencyMs:6 },
+];
+
+let _obSeq = 0;
+function nextOBRow(): OBRow {
+  const base = OB_FALLBACK[_obSeq % OB_FALLBACK.length];
+  _obSeq++;
+  const now = new Date();
+  return { ...base, id: _obSeq, ts: now.toTimeString().slice(0, 8) };
+}
+
+function sourceBadge(src: "setu" | "plaid") {
+  return src === "setu"
+    ? "text-[#7C3AED] bg-[#7C3AED]/10 border border-[#7C3AED]/25"
+    : "text-[#0EA5E9] bg-[#0EA5E9]/10 border border-[#0EA5E9]/25";
+}
+
+function OpenBankingModule() {
+  const [rows, setRows]           = useState<OBRow[]>([]);
+  const [usingFallback, setFB]    = useState(false);
+  const [paused, setPaused]       = useState(false);
+  const [stats, setStats]         = useState({ setu: 0, plaid: 0, block: 0, flag: 0 });
+
+  // Try SSE from Python bridge
+  useEffect(() => {
+    if (usingFallback) return;
+    const API_BASE = getApiBaseNormalized();
+    let es: EventSource | null = null;
+    function connect() {
+      es = new EventSource(`${API_BASE}/v1/open-banking/stream?source=both`);
+      es.onmessage = (e) => {
+        try {
+          const d = JSON.parse(e.data) as {
+            source: "setu" | "plaid";
+            sender_vpa: string;
+            receiver_vpa: string;
+            amount: number;
+            currency: string;
+            category: string;
+            verdict: Verdict;
+            risk_score: number;
+            latency_ms: number;
+          };
+          const row: OBRow = {
+            id:        Date.now() + Math.random(),
+            ts:        new Date().toTimeString().slice(0, 8),
+            source:    d.source,
+            sender:    d.sender_vpa,
+            receiver:  d.receiver_vpa,
+            amount:    d.amount,
+            currency:  d.currency,
+            category:  d.category,
+            verdict:   d.verdict,
+            riskScore: d.risk_score,
+            latencyMs: d.latency_ms,
+          };
+          setRows((prev) => { const next = [row, ...prev]; return next.length > 40 ? next.slice(0, 40) : next; });
+          setStats((s) => ({
+            setu:  s.setu  + (d.source === "setu"  ? 1 : 0),
+            plaid: s.plaid + (d.source === "plaid" ? 1 : 0),
+            block: s.block + (d.verdict === "BLOCK" ? 1 : 0),
+            flag:  s.flag  + (d.verdict === "FLAG"  ? 1 : 0),
+          }));
+        } catch { /* skip malformed */ }
+      };
+      es.onerror = () => { setFB(true); es?.close(); es = null; };
+    }
+    connect();
+    return () => es?.close();
+  }, [usingFallback]);
+
+  // Deterministic fallback
+  useEffect(() => {
+    if (!usingFallback || paused) return;
+    const t = setInterval(() => {
+      const row = nextOBRow();
+      setRows((prev) => { const next = [row, ...prev]; return next.length > 40 ? next.slice(0, 40) : next; });
+      setStats((s) => ({
+        setu:  s.setu  + (row.source === "setu"  ? 1 : 0),
+        plaid: s.plaid + (row.source === "plaid" ? 1 : 0),
+        block: s.block + (row.verdict === "BLOCK" ? 1 : 0),
+        flag:  s.flag  + (row.verdict === "FLAG"  ? 1 : 0),
+      }));
+    }, 3000);
+    return () => clearInterval(t);
+  }, [usingFallback, paused]);
+
+  return (
+    <section className="border border-cream/[0.08] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-cream/[0.07] bg-cream/[0.025] shrink-0">
+        <div className="flex items-center gap-2.5">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-allow animate-pulse" />
+          <span className="font-barlow text-[0.57rem] tracking-[0.30em] uppercase text-cream/40">
+            Module H &mdash; Open Banking Feed
+          </span>
+          {usingFallback && (
+            <span className="font-courier text-[0.48rem] text-cream/22 border border-cream/[0.12] px-1.5 py-0.5">
+              synthetic
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-3 mr-1">
+            {[
+              { label: "Setu",  val: stats.setu,  cls: "text-[#7C3AED]" },
+              { label: "Plaid", val: stats.plaid, cls: "text-[#0EA5E9]" },
+              { label: "Flag",  val: stats.flag,  cls: "text-flag" },
+              { label: "Block", val: stats.block, cls: "text-block" },
+            ].map((s) => (
+              <div key={s.label} className="flex items-center gap-1">
+                <span className={`font-courier text-[0.66rem] font-bold ${s.cls}`}>{s.val}</span>
+                <span className="font-barlow text-[0.46rem] tracking-widest uppercase text-cream/20">{s.label}</span>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => setPaused((p) => !p)}
+            className={`font-barlow text-[0.54rem] tracking-[0.22em] uppercase border px-2.5 py-1 transition-colors ${
+              paused ? "border-saffron/40 text-saffron" : "border-cream/30 text-cream/50 hover:border-cream/60"
+            }`}
+          >
+            {paused ? "▶ Resume" : "⏸ Pause"}
+          </button>
+        </div>
+      </div>
+
+      {/* Source info cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-cream/[0.06] border-b border-cream/[0.06]">
+        {[
+          {
+            key: "setu",
+            name: "Setu Account Aggregator",
+            country: "India",
+            standard: "RBI AA / UPI FIP",
+            dotCls: "bg-[#7C3AED]",
+            textCls: "text-[#7C3AED]",
+            desc: "RBI-licensed AA framework. Fetches UPI transaction history via FIP consent flow.",
+            tags: ["UPI", "IMPS", "NEFT", "INR"],
+          },
+          {
+            key: "plaid",
+            name: "Plaid Open Banking",
+            country: "US / EU",
+            standard: "PSD2 / Open Finance",
+            dotCls: "bg-[#0EA5E9]",
+            textCls: "text-[#0EA5E9]",
+            desc: "12,000+ institutions. Sandbox provides realistic ACH, debit, and wire transactions.",
+            tags: ["ACH", "Wire", "Debit", "USD"],
+          },
+        ].map((src) => (
+          <div key={src.key} className="px-5 py-3.5 flex items-start gap-3">
+            <span className={`mt-1.5 inline-block w-2 h-2 rounded-full shrink-0 ${src.dotCls}`} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className={`font-barlow text-[0.60rem] font-semibold tracking-wide ${src.textCls}`}>{src.name}</span>
+                <span className="font-courier text-[0.46rem] text-cream/22 border border-cream/[0.10] px-1 py-px">{src.country}</span>
+              </div>
+              <p className="font-barlow text-[0.60rem] text-cream/35 leading-relaxed mb-1.5">{src.desc}</p>
+              <div className="flex flex-wrap gap-1">
+                {src.tags.map((t) => (
+                  <span key={t} className="font-courier text-[0.44rem] text-cream/25 border border-cream/[0.08] px-1 py-px">{t}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Normalisation pipeline pill */}
+      <div className="flex items-center gap-2 px-5 py-2.5 border-b border-cream/[0.05] bg-cream/[0.01] overflow-x-auto">
+        {[
+          { label: "Setu FIP JSON",     accent: "#7C3AED" },
+          { label: "→ Normalizer.py",   accent: "#D97706" },
+          { label: "→ 24-feature vec",  accent: "#D97706" },
+          { label: "→ Rust ONNX",       accent: "#2563EB" },
+          { label: "→ Verdict",         accent: "#0D7A5F" },
+        ].map((s) => (
+          <span
+            key={s.label}
+            className="font-courier text-[0.52rem] whitespace-nowrap shrink-0"
+            style={{ color: s.accent }}
+          >
+            {s.label}
+          </span>
+        ))}
+        <span className="mx-1 text-cream/10 select-none">|</span>
+        {[
+          { label: "Plaid JSON",        accent: "#0EA5E9" },
+          { label: "→ Normalizer.py",   accent: "#D97706" },
+          { label: "→ 24-feature vec",  accent: "#D97706" },
+          { label: "→ Rust ONNX",       accent: "#2563EB" },
+          { label: "→ Verdict",         accent: "#0D7A5F" },
+        ].map((s) => (
+          <span
+            key={s.label}
+            className="font-courier text-[0.52rem] whitespace-nowrap shrink-0"
+            style={{ color: s.accent }}
+          >
+            {s.label}
+          </span>
+        ))}
+      </div>
+
+      {/* Feed table header */}
+      <div className="grid grid-cols-[52px_60px_1fr_1fr_72px_56px_56px_64px] gap-2 px-4 py-2 border-b border-cream/[0.05] bg-cream/[0.015] shrink-0">
+        {["Time","Src","Sender","Receiver","Amount","Cat","Risk","Verdict"].map((h) => (
+          <span key={h} className="font-barlow text-[0.46rem] tracking-[0.22em] uppercase text-cream/20">{h}</span>
+        ))}
+      </div>
+
+      {/* Feed rows */}
+      <div className="overflow-y-auto" style={{ maxHeight: "420px" }}>
+        {rows.length === 0 && (
+          <div className="px-5 py-8 text-center font-barlow text-[0.60rem] text-cream/18 tracking-widest uppercase">
+            Waiting for open banking stream…
+          </div>
+        )}
+        {rows.map((row, i) => (
+          <div
+            key={row.id}
+            className={`grid grid-cols-[52px_60px_1fr_1fr_72px_56px_56px_64px] gap-2 px-4 py-2.5 border-b border-cream/[0.04] hover:bg-cream/[0.025] transition-colors ${
+              i === 0 ? "bg-cream/[0.02]" : ""
+            }`}
+          >
+            <span className="font-courier text-[0.58rem] text-cream/45 tabular-nums">{row.ts}</span>
+            <span className={`font-courier text-[0.52rem] px-1 py-0.5 text-center self-center ${sourceBadge(row.source)}`}>
+              {row.source === "setu" ? "Setu" : "Plaid"}
+            </span>
+            <span className="font-courier text-[0.60rem] text-cream/50 truncate">{maskVpa(row.sender)}</span>
+            <span className="font-courier text-[0.60rem] text-cream/35 truncate">{maskVpa(row.receiver)}</span>
+            <span className="font-courier text-[0.60rem] text-cream/50 tabular-nums">
+              {row.currency === "INR" ? "₹" : "$"}{row.currency === "INR" ? row.amount.toLocaleString("en-IN") : row.amount.toFixed(2)}
+            </span>
+            <span className="font-barlow text-[0.50rem] text-cream/25 truncate self-center">{row.category}</span>
+            <div className="flex items-center gap-1">
+              <div className="flex-1 h-1 bg-cream/[0.07]">
+                <div className={`h-full ${riskBar(row.riskScore)}`} style={{ width: `${row.riskScore * 100}%` }} />
+              </div>
+            </div>
+            <span className={`font-courier text-[0.52rem] tracking-wider uppercase px-1 py-0.5 text-center self-center ${verdictBadge(row.verdict)}`}>
+              {row.verdict}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div className="px-5 py-2 border-t border-cream/[0.07] bg-cream/[0.015] flex items-center justify-between shrink-0">
+        <span className="font-barlow text-[0.50rem] tracking-widest uppercase text-cream/18">
+          {rows.length} open banking signals processed
+        </span>
+        <span className="font-courier text-[0.48rem] text-cream/15">
+          {usingFallback ? "synthetic fallback · backend offline" : "live · Setu AA + Plaid"}
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function EmbeddedTierPanel() {
+  return (
+    <div className="space-y-6">
+      {/* Explainer banner */}
+      <div className="border border-cream/[0.08] bg-cream/[0.015] px-6 py-5">
+        <div className="flex items-start gap-4">
+          <div>
+            <p className="font-barlow text-[0.55rem] tracking-[0.30em] uppercase text-saffron mb-1.5">Tier 3 &mdash; Embedded SDK</p>
+            <h2 className="font-playfair font-bold text-cream text-[1.3rem] leading-snug mb-2">
+              On-Device, Pre-Network Defense
+            </h2>
+            <p className="font-barlow text-[0.78rem] text-cream/50 max-w-2xl leading-relaxed">
+              The Varaksha Embedded SDK packages the ONNX Random Forest model into a sub-5MB bundle deployable inside iOS and Android UPI apps via ONNX Runtime Mobile.
+              Fraud is scored locally &mdash; zero network round-trip, offline-capable, operates before the transaction even leaves the device.
+              The simulation below shows the on-device gate logic running in your browser.
+            </p>
+          </div>
+          <div className="shrink-0 hidden md:block">
+            <div className="flex flex-col gap-2">
+              {[
+                { label: "Bundle size",  value: "<5 MB" },
+                { label: "Latency",      value: "<1 ms" },
+                { label: "Network req",  value: "None"  },
+                { label: "Offline",      value: "Yes"   },
+              ].map((s) => (
+                <div key={s.label} className="border border-cream/[0.08] px-3 py-1.5 flex items-center justify-between gap-8">
+                  <span className="font-barlow text-[0.52rem] tracking-widest uppercase text-cream/25">{s.label}</span>
+                  <span className="font-courier text-[0.72rem] text-cream/60">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Simulation component */}
+      <Tier3EdgeSim />
+
+      {/* Tech specs */}
+      <div className="border border-cream/[0.08] overflow-hidden">
+        <div className="px-5 py-3 border-b border-cream/[0.06] bg-cream/[0.025]">
+          <span className="font-barlow text-[0.57rem] tracking-[0.30em] uppercase text-cream/40">Deployment Specification</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-cream/[0.04] p-px">
+          {[
+            {
+              title: "Model Packaging",
+              accent: "#2563EB",
+              items: ["Quantized ONNX Random Forest", "16-feature inference vector", "StandardScaler pre-baked", "ONNX opset 17 compatible"],
+            },
+            {
+              title: "Mobile Runtime",
+              accent: "#0D7A5F",
+              items: ["ONNX Runtime Mobile (C++)", "Android NDK / iOS XCFramework", "JNI/Swift bridge layer", "No Python dependency"],
+            },
+            {
+              title: "Local Heuristics",
+              accent: "#D97706",
+              items: ["Device velocity fingerprint", "Odd-hour anomaly gate", "Clipboard phishing scan", "Receiver risk signature"],
+            },
+          ].map((col) => (
+            <div key={col.title} className="bg-ink p-5">
+              <div className="h-0.5 mb-4" style={{ backgroundColor: col.accent }} />
+              <h4 className="font-playfair font-bold text-cream text-[0.95rem] mb-3">{col.title}</h4>
+              <ul className="space-y-1.5">
+                {col.items.map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <span className="mt-1 w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: col.accent }} />
+                    <span className="font-courier text-[0.60rem] text-cream/40">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function LivePage() {
+  const [activeTier, setActiveTier] = useState<Tier>("cloud");
+
   return (
     // Dark ink background — overrides the cream set in layout.tsx
     <main
@@ -1181,26 +1841,133 @@ export default function LivePage() {
           </div>
         </div>
 
+        {/* ── Tier switcher ─────────────────────────────────────────────── */}
+        <div className="flex items-center gap-1 border border-cream/[0.10] p-1 bg-cream/[0.02] w-fit">
+          {(
+            [
+              { id: "cloud",      label: "Cloud",        sublabel: "Live · Railway API",  dot: "bg-allow"   },
+              { id: "enterprise", label: "Enterprise",   sublabel: "Live · Graph Engine",  dot: "bg-allow"   },
+              { id: "embedded",   label: "Embedded SDK", sublabel: "Simulation",           dot: "bg-saffron" },
+            ] as const
+          ).map(({ id, label, sublabel, dot }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTier(id)}
+              className={`flex flex-col items-start px-4 py-2.5 transition-all duration-200 border ${
+                activeTier === id
+                  ? "bg-cream/[0.08] border-cream/[0.18] shadow-[inset_0_1px_0_rgba(240,244,248,0.08)]"
+                  : "border-transparent hover:bg-cream/[0.04]"
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${dot} ${activeTier === id ? "animate-pulse" : "opacity-40"}`} />
+                <span className={`font-barlow text-[0.62rem] tracking-[0.18em] uppercase font-semibold ${activeTier === id ? "text-cream" : "text-cream/40"}`}>
+                  {label}
+                </span>
+              </div>
+              <span className="font-courier text-[0.48rem] text-cream/22 pl-3.5">{sublabel}</span>
+            </button>
+          ))}
+        </div>
+
         {/* ── KPI strip ─────────────────────────────────────────────────── */}
         <KpiStrip />
 
-        {/* ── Two-column layout: Sandbox | Feed ─────────────────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr] gap-6 items-start">
-          <IntelSandbox />
-          <TransactionFeed />
-        </div>
+        {/* ════════════════════════════════════════════════════════════════
+            CLOUD TIER — Full SOC Dashboard
+        ════════════════════════════════════════════════════════════════ */}
+        {activeTier === "cloud" && (
+          <div className="space-y-6">
+            {/* Tier badge */}
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-allow animate-pulse" />
+              <span className="font-barlow text-[0.58rem] tracking-[0.28em] uppercase text-cream/30 font-semibold">
+                Cloud Tier &mdash; Varaksha Gateway &middot; Hosted on Railway &middot; Live inference via ONNX Runtime
+              </span>
+            </div>
 
-        {/* ── C | D ─────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-          <CacheVisualizer />
-          <SecurityArena />
-        </div>
+            {/* Two-column layout: Sandbox | Feed */}
+            <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr] gap-6 items-start">
+              <IntelSandbox />
+              <TransactionFeed />
+            </div>
 
-        {/* ── F full-width — ML model stack ─────────────────────────────── */}
-        <MLModelModule />
+            {/* C | D */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+              <CacheVisualizer />
+              <SecurityArena />
+            </div>
 
-        {/* ── E full-width ──────────────────────────────────────────────── */}
-        <LegalReport />
+            {/* H full-width — Open Banking Feed */}
+            <OpenBankingModule />
+
+            {/* F full-width — ML model stack */}
+            <MLModelModule />
+
+            {/* E full-width */}
+            <LegalReport />
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            ENTERPRISE TIER — Graph Network Monitor + Security Arena
+        ════════════════════════════════════════════════════════════════ */}
+        {activeTier === "enterprise" && (
+          <div className="space-y-6">
+            {/* Tier badge */}
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-allow animate-pulse" />
+              <span className="font-barlow text-[0.58rem] tracking-[0.28em] uppercase text-cream/30 font-semibold">
+                Enterprise Tier &mdash; Graph Engine &middot; NetworkX Topology &middot; Live Transaction Network
+              </span>
+            </div>
+
+            {/* Graph monitor full-width */}
+            <GraphNetworkMonitor />
+
+            {/* Open Banking Feed full-width */}
+            <OpenBankingModule />
+
+            {/* Security Arena + ML Stack side by side */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+              <SecurityArena />
+              <div className="space-y-6">
+                {/* Enterprise context card */}
+                <div className="border border-cream/[0.08] bg-cream/[0.015] p-5">
+                  <p className="font-barlow text-[0.55rem] tracking-[0.28em] uppercase text-saffron mb-2">Enterprise Deployment</p>
+                  <h3 className="font-playfair font-bold text-cream text-[1.1rem] mb-3">API-First Architecture</h3>
+                  <p className="font-barlow text-[0.75rem] text-cream/45 leading-relaxed mb-4">
+                    Enterprise deployments expose the Varaksha engine as a Rust-native REST API behind mutual TLS.
+                    PSP banks integrate via webhook push from the graph agent, receiving HMAC-SHA256 signed verdict bundles
+                    with full audit trails per NPCI OC-215/2025-26.
+                  </p>
+                  <div className="space-y-2">
+                    {[
+                      { label: "Auth",         value: "mTLS + HMAC-SHA256 signed webhooks" },
+                      { label: "Throughput",   value: "5,000+ TPS (DashMap concurrent cache)" },
+                      { label: "Graph scope",  value: "Fan-out · Fan-in · Cycle · Scatter" },
+                      { label: "Audit",        value: "Per-VPA trail · DPDP §7(g) compliant" },
+                      { label: "Compliance",   value: "NPCI OC-215 · RBI Master Directions" },
+                    ].map((r) => (
+                      <div key={r.label} className="flex items-start gap-3">
+                        <span className="font-barlow text-[0.50rem] tracking-widest uppercase text-cream/25 w-20 shrink-0 pt-px">{r.label}</span>
+                        <span className="font-courier text-[0.60rem] text-cream/50">{r.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Full-width ML stack */}
+            <MLModelModule />
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            EMBEDDED TIER — On-Device SDK Simulation
+        ════════════════════════════════════════════════════════════════ */}
+        {activeTier === "embedded" && <EmbeddedTierPanel />}
 
       </div>
 

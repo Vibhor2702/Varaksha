@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, type Variants } from "framer-motion";
+import { DashMapVisualizer } from "./components/DashMapVisualizer";
 
 // ── Animation Variants ────────────────────────────────────────────────────────
 
@@ -247,6 +248,16 @@ export default function PitchPage() {
           <div className="flex-1 h-px bg-ink/10" />
         </div>
       </div>
+
+      <section className="px-6 lg:px-12 pb-16 max-w-7xl mx-auto">
+        <div className="flex items-center gap-3 mb-5">
+          <span className="font-barlow text-[0.62rem] tracking-[0.30em] uppercase text-ink/30">
+            Gateway Memory View
+          </span>
+          <div className="flex-1 h-px bg-ink/10" />
+        </div>
+        <DashMapVisualizer />
+      </section>
 
       {/* ── Mission Statement ─────────────────────────────────────────────── */}
       <motion.section

@@ -48,10 +48,10 @@
     }
   },
   "timings_seconds": {
-    "selection": 1.8132,
-    "final_lgbm_fit": 0.9412,
-    "isolation_fit": 0.3907,
-    "onnx_export": 12.8377,
-    "holdout_eval": 0.0697
+    "selection": 1.9342,
+    "final_lgbm_fit": 0.9531,
+    "isolation_fit": 0.3873,
+    "onnx_export": 12.8751,
+    "holdout_eval": 0.072
   }
 }

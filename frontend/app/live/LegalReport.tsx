@@ -25,6 +25,73 @@ const LANGUAGES = [
 ] as const;
 
 type LangCode = typeof LANGUAGES[number]["code"];
+type Verdict = "ALLOW" | "FLAG" | "BLOCK";
+
+interface ReportIncident {
+  transactionId: string;
+  senderVpa: string;
+  receiverVpa: string;
+  amount: number;
+  timestampIso: string;
+  merchantCat: string;
+  verdict: Verdict;
+  riskScore: number;
+  lgbmScore?: number;
+  anomalyScore?: number;
+  graphDelta?: number;
+  graphReason?: string | null;
+  reasons?: string[];
+}
+
+const DEFAULT_INCIDENT: ReportIncident = {
+  transactionId: "TXN20260310-00842",
+  senderVpa: "suraj.thakur@okicici",
+  receiverVpa: "cash.agent.77@paytm",
+  amount: 99999,
+  timestampIso: "2026-03-10T03:14:07Z",
+  merchantCat: "Finance",
+  verdict: "BLOCK",
+  riskScore: 0.90,
+  lgbmScore: 0.89,
+  anomalyScore: 0.91,
+  graphDelta: 0.10,
+  graphReason: "fan_in+cycle",
+  reasons: [
+    "Off-hours transaction",
+    "High-value transfer exceeding ₹50,000 threshold",
+    "First-seen device fingerprint",
+  ],
+};
+
+function fmtIstFromIso(tsIso: string): string {
+  const d = new Date(tsIso);
+  if (Number.isNaN(d.getTime())) return "N/A";
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).replace(",", "");
+}
+
+function classificationForVerdict(verdict: Verdict): string {
+  return verdict === "BLOCK" ? "BLOCKED — HIGH RISK" : "FLAGGED — REVIEW REQUIRED";
+}
+
+function verdictLabel(verdict: Verdict): string {
+  return verdict === "BLOCK" ? "BLOCKED" : verdict;
+}
+
+function legalActionsForVerdict(verdict: Verdict): string {
+  if (verdict === "BLOCK") {
+    return "Immediate preventive action taken — transaction blocked by policy.";
+  }
+  return "Transaction flagged for manual review and customer confirmation before escalation.";
+}
 
 // ── Per-language personalised alert text ──────────────────────────────────
 const ALERT_TEXT: Record<LangCode, { primary: string; secondary: string }> = {
@@ -63,9 +130,17 @@ const ALERT_TEXT: Record<LangCode, { primary: string; secondary: string }> = {
 };
 
 // ── Personalised downloadable report (language-aware) ─────────────────────
-function buildReport(lang: LangCode): string {
+function buildReport(lang: LangCode, incident: ReportIncident): string {
   const langObj     = LANGUAGES.find((l) => l.code === lang)!;
   const alertT      = ALERT_TEXT[lang];
+  const alertSecondary = incident.verdict === "FLAG"
+    ? `Transaction ${incident.transactionId} has been flagged for verification. Please confirm this payment with your bank or app before retrying.`
+    : alertT.secondary;
+  const caseRef = `${incident.transactionId}-${incident.verdict}`;
+  const displayTs = fmtIstFromIso(incident.timestampIso);
+  const lgbm = incident.lgbmScore ?? 0;
+  const anomaly = incident.anomalyScore ?? 0;
+  const graph = incident.graphDelta ?? 0;
   const langSection = lang === "en"
     ? ""
     : `
@@ -74,40 +149,41 @@ ALERT NOTIFICATION  —  ${langObj.name}  (${langObj.voiceLabel} Neural MT)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${alertT.primary}
 
-${alertT.secondary}
+${alertSecondary}
 `;
 
   return `
 VARAKSHA FRAUD INTELLIGENCE NETWORK
 Legal Evidence Report  —  Auto-Generated
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Case Reference : TXN20260310-BLOCK-00842
-Generated      : 2026-03-10T03:14:07Z  (IST)
+Case Reference : ${caseRef}
+Generated      : ${incident.timestampIso}  (IST)
 Alert Language : ${langObj.name}  (${langObj.voiceLabel})
-Classification : BLOCKED — HIGH RISK
+Classification : ${classificationForVerdict(incident.verdict)}
 System Version : Varaksha V2  ·  NPCI Hackathon 2026  ·  Blue Team
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TRANSACTION DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Transaction ID  : TXN20260310-00842
-Sender VPA      : suraj.thakur@okicici
-Receiver VPA    : cash.agent.77@paytm
-Amount          : ₹99,999.00
-Timestamp       : 2026-03-10  03:14:07  IST
-Merchant Cat.   : Finance  (High-Risk Category)
+Transaction ID  : ${incident.transactionId}
+Sender VPA      : ${incident.senderVpa}
+Receiver VPA    : ${incident.receiverVpa}
+Amount          : ₹${incident.amount.toLocaleString("en-IN")}.00
+Timestamp       : ${displayTs}  IST
+Merchant Cat.   : ${incident.merchantCat}
 Device Status   : FIRST-SEEN  (new device fingerprint)
 
-VERDICT        : BLOCK
-Risk Score     : 0.90 / 1.00  (RF: 0.89  ·  IsolationForest: 0.91)
+VERDICT        : ${incident.verdict}
+Risk Score     : ${incident.riskScore.toFixed(2)} / 1.00  (LGBM ONNX: ${lgbm.toFixed(2)}  ·  IF ONNX: ${anomaly.toFixed(2)}  ·  Topology Delta: +${graph.toFixed(2)})
+Action         : ${legalActionsForVerdict(incident.verdict)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FRAUD SIGNALS DETECTED
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 1.  Off-hours transaction: 03:14 IST  (HOUR_SIN = -0.99 — deep anomaly)
- 2.  High-value transfer exceeding ₹50,000 threshold  (AMOUNT_LOG = 11.51)
- 3.  First-seen device fingerprint  (new device flag: TRUE)
- 4.  Receiver VPA pattern "cash.agent.77" — synthetic mule indicator
- 5.  ML composite score: 0.90  (Random Forest 0.89 · IsolationForest 0.91)
- 6.  Merchant category "Finance" — elevated risk category
+ 1.  ${incident.reasons?.[0] ?? "Off-hours transaction signal observed"}
+ 2.  ${incident.reasons?.[1] ?? "High-risk amount/device pattern detected"}
+ 3.  ${incident.reasons?.[2] ?? "Device novelty and topology checks triggered"}
+ 4.  Graph Reason: ${incident.graphReason ?? "n/a"}
+ 5.  ML + topology fused score: ${incident.riskScore.toFixed(2)} (LGBM ONNX ${lgbm.toFixed(2)} · IF ONNX ${anomaly.toFixed(2)} · Graph Delta +${graph.toFixed(2)})
+ 6.  Merchant category "${incident.merchantCat}" evaluated in live policy path
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 APPLICABLE LEGAL PROVISIONS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -139,9 +215,10 @@ APPLICABLE LEGAL PROVISIONS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SYSTEM EVIDENCE CHAIN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SHA-256(suraj.thakur@okicici) : 7f3a9c12e803b5d1902871ea6cd048f3...
-Consortium Cache               : HIT — Risk delta: 0.90 written to DashMap
-Graph Analysis                 : Off-path async — pending corroboration
+SHA-256(${incident.senderVpa}) : [gateway-side hashed surrogate]
+Consortium Cache               : ${graph > 0 ? "HIT" : "MISS"} — Risk delta: ${graph.toFixed(2)} written to DashMap
+Graph Analysis                 : Async graph agent update signed via HMAC-SHA256
+Scoring Formula                : fused = lgbm_weight*lgbm + anomaly_weight*if + topology_weight*graph_delta
 Alert Delivery                 : Neural MT (${langObj.voiceLabel}) + edge-tts MP3${langSection}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CERTIFYING SYSTEM : Varaksha V2 Fraud Intelligence Network
@@ -170,10 +247,30 @@ export function LegalReport() {
   const [language,      setLanguage     ] = useState<LangCode>("hi");
   const [audioDuration, setAudioDuration] = useState(0);
   const [currentTimeSec,setCurrentTimeSec] = useState(0);
+  const [incident,      setIncident     ] = useState<ReportIncident>(DEFAULT_INCIDENT);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const langObj = LANGUAGES.find((l) => l.code === language)!;
   const alertT  = ALERT_TEXT[language];
+  const alertSecondary = incident.verdict === "FLAG"
+    ? `Transaction ${incident.transactionId} has been flagged for verification. Please confirm this payment with your bank or app before retrying.`
+    : alertT.secondary;
+
+  useEffect(() => {
+    const onIncident = (event: Event) => {
+      const custom = event as CustomEvent<Partial<ReportIncident>>;
+      if (!custom.detail) return;
+      const next = { ...DEFAULT_INCIDENT, ...custom.detail } as ReportIncident;
+      if (next.verdict === "FLAG" || next.verdict === "BLOCK") {
+        setIncident(next);
+      }
+    };
+
+    window.addEventListener("varaksha:incident", onIncident as EventListener);
+    return () => {
+      window.removeEventListener("varaksha:incident", onIncident as EventListener);
+    };
+  }, []);
 
   // ── Reset audio whenever language changes ───────────────────────────────
   useEffect(() => {
@@ -210,11 +307,11 @@ export function LegalReport() {
     if (dlState === "generating") return;
     setDlState("generating");
     setTimeout(() => {
-      const blob = new Blob([buildReport(language)], { type: "text/plain;charset=utf-8" });
+      const blob = new Blob([buildReport(language, incident)], { type: "text/plain;charset=utf-8" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
-      a.download = "varaksha-evidence-TXN20260310-00842.txt";
+      a.download = `varaksha-evidence-${incident.transactionId}-${incident.verdict}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -222,7 +319,7 @@ export function LegalReport() {
       setDlState("done");
       setTimeout(() => setDlState("idle"), 3500);
     }, 1600);
-  }, [dlState, language]);
+  }, [dlState, incident, language]);
 
   const durationStr = audioDuration > 0 ? fmtTime(audioDuration) : "0:08";
 
@@ -247,7 +344,7 @@ export function LegalReport() {
         {/* ── Left: victim alert card ─────────────────────────────────────── */}
         <div className="p-6 lg:p-8">
 
-          {/* BLOCKED header */}
+          {/* Verdict header */}
           <div className="flex items-center gap-3 mb-6">
             <motion.div
               className="w-10 h-10 border-2 border-block flex items-center justify-center shrink-0"
@@ -261,7 +358,7 @@ export function LegalReport() {
                 Varaksha Verdict
               </p>
               <p className="font-courier font-bold text-block leading-none" style={{ fontSize: "1.8rem" }}>
-                BLOCKED
+                {verdictLabel(incident.verdict)}
               </p>
             </div>
           </div>
@@ -269,12 +366,12 @@ export function LegalReport() {
           {/* Transaction details rows */}
           <div className="border border-block/10 bg-block/[0.03] mb-6">
             {[
-              { label: "TRANSACTION",  value: "TXN20260310-00842" },
-          { label: "FROM",         value: "suraj.thakur@okicici" },
-              { label: "TO",           value: "cash.agent.77@paytm" },
-              { label: "AMOUNT",       value: "₹99,999.00" },
-              { label: "TIME",         value: "03:14:07 IST  (off-hours)" },
-              { label: "RISK SCORE",   value: "0.90 / 1.00" },
+              { label: "TRANSACTION",  value: incident.transactionId },
+          { label: "FROM",         value: incident.senderVpa },
+              { label: "TO",           value: incident.receiverVpa },
+              { label: "AMOUNT",       value: `₹${incident.amount.toLocaleString("en-IN")}.00` },
+              { label: "TIME",         value: `${fmtIstFromIso(incident.timestampIso)} IST` },
+              { label: "RISK SCORE",   value: `${incident.riskScore.toFixed(2)} / 1.00` },
             ].map((r) => (
               <div
                 key={r.label}
@@ -351,7 +448,7 @@ export function LegalReport() {
 
             {/* Secondary — extended personalised alert */}
             <p className="font-barlow text-[0.78rem] text-cream/60 font-semibold leading-relaxed mb-5">
-              {alertT.secondary}
+              {alertSecondary}
             </p>
 
             {/* ── Audio player ── */}
@@ -470,7 +567,7 @@ export function LegalReport() {
                     <path d="M8 11L3 6h3V1h4v5h3L8 11z" />
                     <rect x="2" y="13" width="12" height="2" />
                   </svg>
-                  Download Court-Ready PDF (BNS §318(4) &amp; IT Act §66C/D &amp; DPDP §7(g))
+                  Download Court-Ready Evidence File (BNS §318(4) &amp; IT Act §66C/D &amp; DPDP §7(g))
                 </motion.span>
               )}
 
@@ -508,7 +605,7 @@ export function LegalReport() {
                       strokeLinejoin="round"
                     />
                   </svg>
-                  Report downloaded — varaksha-evidence-TXN20260310-00842.txt
+                  Report downloaded — {`varaksha-evidence-${incident.transactionId}-${incident.verdict}.txt`}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -588,7 +685,7 @@ export function LegalReport() {
             </p>
             {[
               { step: "01", label: "SHA-256 VPA Hash",     detail: "Privacy-preserving · no raw PII" },
-              { step: "02", label: "ML Ensemble Score",    detail: "RF=0.89  ·  XGB=0.91  →  0.90" },
+              { step: "02", label: "ONNX + Topology Fusion", detail: `LGBM=${(incident.lgbmScore ?? 0).toFixed(2)} · IF=${(incident.anomalyScore ?? 0).toFixed(2)} · Δ=${(incident.graphDelta ?? 0).toFixed(2)}` },
               { step: "03", label: "Gateway Verdict Log",  detail: "Timestamped  ·  immutable" },
               { step: "04", label: "Alert Delivery",      detail: `${langObj.voiceLabel} Neural MT  ·  edge-tts MP3` },
             ].map((e) => (

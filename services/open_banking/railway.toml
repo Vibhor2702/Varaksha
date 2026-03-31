@@ -1,0 +1,25 @@
+# Varaksha Python Bridge — Railway Deployment Config
+# Set root directory to: services/open_banking
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "python feed_bridge.py"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Required Railway environment variables:
+# RUST_GATEWAY_URL       — internal Railway URL of the rust-gateway service
+# VARAKSHA_API_KEY       — must match the Rust gateway's key
+# VARAKSHA_UPDATE_SECRET — must match the Rust gateway's update secret
+#
+# Optional (open banking credentials):
+# SETU_CLIENT_ID         — Setu Bridge console (https://bridge.setu.co)
+# SETU_CLIENT_SECRET     — Setu Bridge console
+# PLAID_CLIENT_ID        — Plaid dashboard (https://dashboard.plaid.com)
+# PLAID_SECRET           — Plaid sandbox secret
+# PLAID_ENV=sandbox

@@ -1,0 +1,118 @@
+# ════════════════════════════════════════════════════════════════════════════════
+# Varaksha V2 — Full Stack Local Development
+# Services: rust-gateway | python-bridge | frontend (Next.js dev server)
+#
+# Usage:
+#   docker compose up --build          # start all services
+#   docker compose up rust-gateway     # start only the Rust gateway
+#   docker compose up python-bridge    # start only the Python services
+# ════════════════════════════════════════════════════════════════════════════════
+
+version: "3.9"
+
+networks:
+  varaksha-net:
+    driver: bridge
+
+volumes:
+  model-data:
+    driver: local
+
+services:
+
+  # ── 1. Rust ML Gateway ──────────────────────────────────────────────────────
+  rust-gateway:
+    build:
+      context: ./risk-cache
+      dockerfile: Dockerfile
+    container_name: varaksha-gateway
+    restart: on-failure
+    networks: [varaksha-net]
+    ports:
+      - "8080:8080"
+    environment:
+      RUST_LOG: info
+      VARAKSHA_TIER: cloud
+      VARAKSHA_PRODUCTION: "false"
+      VARAKSHA_BIND_ADDR: "0.0.0.0:8080"
+      VARAKSHA_MODELS_DIR: /app/models
+      VARAKSHA_AUDIT_LOG_PATH: /app/logs/security_audit.jsonl
+      ORT_DYLIB_PATH: /usr/local/lib/libonnxruntime.so
+      # Secrets — override in .env or docker-compose.override.yml
+      VARAKSHA_API_KEY: ${VARAKSHA_API_KEY:-dev-api-key-changeme}
+      VARAKSHA_UPDATE_SECRET: ${VARAKSHA_UPDATE_SECRET:-dev-update-secret-changeme}
+      VARAKSHA_GRAPH_SECRET: ${VARAKSHA_GRAPH_SECRET:-dev-graph-secret-changeme}
+    volumes:
+      - ./models:/app/models:ro
+      - ./logs/gateway:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── 2. Python Bridge (Open Banking + /v1/tx + /v1/stream) ──────────────────
+  python-bridge:
+    build:
+      context: ./services/open_banking
+      dockerfile: Dockerfile
+    container_name: varaksha-python-bridge
+    restart: on-failure
+    networks: [varaksha-net]
+    ports:
+      - "8000:8000"
+    depends_on:
+      rust-gateway:
+        condition: service_healthy
+    environment:
+      RUST_GATEWAY_URL: http://rust-gateway:8080
+      VARAKSHA_API_KEY: ${VARAKSHA_API_KEY:-dev-api-key-changeme}
+      VARAKSHA_UPDATE_SECRET: ${VARAKSHA_UPDATE_SECRET:-dev-update-secret-changeme}
+      # Open Banking credentials (sandbox — safe to use as-is for dev)
+      SETU_CLIENT_ID: ${SETU_CLIENT_ID:-}
+      SETU_CLIENT_SECRET: ${SETU_CLIENT_SECRET:-}
+      PLAID_CLIENT_ID: ${PLAID_CLIENT_ID:-}
+      PLAID_SECRET: ${PLAID_SECRET:-}
+      PLAID_ENV: sandbox
+      LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── 3. Graph Agent (async topology analysis) ────────────────────────────────
+  graph-agent:
+    build:
+      context: ./services
+      dockerfile: graph/Dockerfile
+    container_name: varaksha-graph-agent
+    restart: on-failure
+    networks: [varaksha-net]
+    depends_on:
+      rust-gateway:
+        condition: service_healthy
+    environment:
+      RUST_GATEWAY_URL: http://rust-gateway:8080
+      VARAKSHA_GRAPH_SECRET: ${VARAKSHA_GRAPH_SECRET:-dev-graph-secret-changeme}
+      LOG_LEVEL: INFO
+
+  # ── 4. Frontend (Next.js dev server, optional) ──────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: varaksha-frontend
+    restart: on-failure
+    networks: [varaksha-net]
+    ports:
+      - "3000:3000"
+    depends_on:
+      python-bridge:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    profiles:
+      - frontend   # opt-in: docker compose --profile frontend up

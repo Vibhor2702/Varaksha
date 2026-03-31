@@ -1,0 +1,22 @@
+# Varaksha Risk-Cache Gateway — Railway Deployment Config
+# Deploy as a Railway service with root directory set to: risk-cache/
+# https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "/app/risk-cache"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Required Railway environment variables (set in Railway dashboard):
+# VARAKSHA_API_KEY         — API key for /inference endpoint
+# VARAKSHA_UPDATE_SECRET   — HMAC secret for /update_cache and /policy/reload
+# VARAKSHA_GRAPH_SECRET    — HMAC secret for /graph_update
+# VARAKSHA_PRODUCTION=true — enables production secret enforcement
+# VARAKSHA_TIER=cloud      — deployment tier (cloud | on_prem | edge)
+# PORT                     — Railway injects this; gateway reads VARAKSHA_BIND_ADDR

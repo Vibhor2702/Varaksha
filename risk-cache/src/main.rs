@@ -1,30 +1,36 @@
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use dashmap::DashMap;
-use hmac::{Hmac, Mac};
-use ndarray::Array2;
-use ort::{inputs, session::Session};
-use ort::value::TensorRef;
-use risk_cache::RiskCache;
+use log::{info, warn};
+use risk_cache::{
+    auth::{verify_api_key, verify_hmac},
+    audit,
+    cache::RiskCache,
+    config::PolicyConfig,
+    models::ModelSessions,
+    rate_limiter::RateLimiter,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::sync::Mutex;
-use std::time::Instant;
+use std::sync::{Arc, RwLock};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-type HmacSha256 = Hmac<Sha256>;
-
-const FEATURE_VECTOR_SIZE: usize = 43;
-const AMOUNT_FEATURE_INDEX: usize = 0;
-const ALLOW_THRESHOLD: f32 = 0.30;
-const BLOCK_THRESHOLD: f32 = 0.85;
+// ── Shared state ──────────────────────────────────────────────────────────────
 
 struct GatewayState {
-    // Stage-1 ONNX session (Sweeper)
-    session: Mutex<Session>,
-    // High-speed cache. Keys must be SHA-256 hashed surrogates only.
+    models: Arc<ModelSessions>,
+    /// Runtime config — reloadable via POST /policy/reload without restart.
+    config: Arc<RwLock<PolicyConfig>>,
+    /// Device feature cache. Keys are SHA-256 hashed device surrogates only.
     feature_cache: DashMap<String, Vec<f32>>,
-    // Graph agent risk deltas. Populated via POST /graph_update (HMAC-signed).
+    /// Graph agent risk deltas. HMAC-signed writes only.
     risk_delta_cache: RiskCache,
+    rate_limiter: Arc<RateLimiter>,
+    audit_log_path: String,
+    /// Unix timestamp (seconds) when the process started — used by /metrics.
+    started_at: u64,
 }
+
+// ── Request / Response shapes ─────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 struct InferenceRequest {
@@ -35,6 +41,7 @@ struct InferenceRequest {
 
 #[derive(Debug, Deserialize)]
 struct CacheUpdateRequest {
+    /// Caller must pre-hash the device_id with SHA-256 before sending.
     hashed_device_id: String,
     features: Vec<f32>,
 }
@@ -51,141 +58,124 @@ struct GraphUpdateRequest {
 struct InferenceResponse {
     hashed_txn_id: String,
     risk_score: f32,
+    lgbm_score: f32,
+    anomaly_score: f32,
     verdict: String,
     execution_time_ms: u128,
     graph_reason: Option<String>,
+    tier: String,
 }
 
+// ── PII helpers ───────────────────────────────────────────────────────────────
+
+/// One-way SHA-256 hash. Call this at the entry point — never store raw PII.
 fn anonymize_pii(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
-    let digest = hasher.finalize();
-    hex::encode(digest)
+    hex::encode(hasher.finalize())
 }
 
-fn normalize_feature_vector(mut features: Vec<f32>, amount: f32) -> Vec<f32> {
-    if features.len() < FEATURE_VECTOR_SIZE {
-        features.resize(FEATURE_VECTOR_SIZE, 0.0);
-    } else if features.len() > FEATURE_VECTOR_SIZE {
-        features.truncate(FEATURE_VECTOR_SIZE);
-    }
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
 
-    features[AMOUNT_FEATURE_INDEX] = amount;
+fn env_non_empty(name: &str) -> bool {
+    std::env::var(name)
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
+}
+
+// ── Feature vector normalization ──────────────────────────────────────────────
+
+/// Ensure the vector is exactly `n_features` long and injects the transaction
+/// amount at index 0 (the first feature column in the manifest).
+fn normalize_feature_vector(mut features: Vec<f32>, amount: f32, n_features: usize) -> Vec<f32> {
+    features.resize(n_features, 0.0);
+    features[0] = amount;
     features
 }
 
-fn extract_probability(outputs: &ort::session::SessionOutputs<'_>) -> Result<f32, String> {
-    let value = &outputs[0];
+// ── Verdict helper ────────────────────────────────────────────────────────────
 
-    let (_shape, values) = value
-        .try_extract_tensor::<f32>()
-        .map_err(|e| format!("Failed to extract ONNX tensor: {e}"))?;
-
-    if values.is_empty() {
-        return Err("ONNX output tensor is empty".to_string());
+fn compute_verdict(score: f32, allow: f32, block: f32) -> &'static str {
+    if score < allow {
+        "ALLOW"
+    } else if score >= block {
+        "BLOCK"
+    } else {
+        "FLAG"
     }
-
-    // Common binary-classifier outputs are [p] or [neg, pos].
-    let prob = if values.len() >= 2 { values[1] } else { values[0] };
-    Ok(prob.clamp(0.0, 1.0))
 }
 
-/// Verify HMAC-SHA256 signature from X-Varaksha-Signature header.
-/// Header format: "sha256=<hex_digest>"
-/// Returns true only when the header is present and the MAC matches.
-fn verify_hmac(secret: &str, body: &[u8], req: &HttpRequest) -> bool {
-    let header_val = match req.headers().get("X-Varaksha-Signature") {
-        Some(v) => match v.to_str() {
-            Ok(s) => s.to_string(),
-            Err(_) => return false,
-        },
-        None => return false,
-    };
+// ── Handlers ──────────────────────────────────────────────────────────────────
 
-    let provided_hex = match header_val.strip_prefix("sha256=") {
-        Some(h) => h.to_string(),
-        None => return false,
-    };
-
-    let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
-        Ok(m) => m,
-        Err(_) => return false,
-    };
-    mac.update(body);
-    let computed = hex::encode(mac.finalize().into_bytes());
-
-    // Constant-time comparison via XOR-fold to prevent timing attacks.
-    if computed.len() != provided_hex.len() {
-        return false;
-    }
-    let mismatch: u8 = computed
-        .bytes()
-        .zip(provided_hex.bytes())
-        .fold(0u8, |acc, (a, b)| acc | (a ^ b));
-    mismatch == 0
-}
-
+/// POST /inference — score a transaction.
+///
+/// Auth: X-Varaksha-Api-Key header (VARAKSHA_API_KEY env var).
+/// Rate limit: per hashed device_id.
+/// PII: raw_device_id and transaction_id are hashed immediately on arrival.
 async fn inference(
+    req: HttpRequest,
     state: web::Data<GatewayState>,
     payload: web::Json<InferenceRequest>,
 ) -> impl Responder {
     let started = Instant::now();
 
-    // Step A: Anonymize incoming PII immediately.
+    // ── Auth ───────────────────────────────────────────────────────────────
+    let api_key = match std::env::var("VARAKSHA_API_KEY") {
+        Ok(k) if !k.is_empty() => k,
+        _ => {
+            return HttpResponse::ServiceUnavailable()
+                .json(serde_json::json!({"error": "inference API key not configured"}));
+        }
+    };
+    if !verify_api_key(&api_key, &req) {
+        warn!("inference_auth_fail");
+        return HttpResponse::Unauthorized()
+            .json(serde_json::json!({"error": "invalid API key"}));
+    }
+
+    // ── PII anonymization (must happen before any logging or storage) ──────
     let device_surrogate = anonymize_pii(&payload.raw_device_id);
     let hashed_txn_id = anonymize_pii(&payload.transaction_id);
 
-    // Step B: Lookup secure surrogate in feature cache, fallback to cold-start vector.
+    // ── Rate limit ─────────────────────────────────────────────────────────
+    if !state.rate_limiter.check_and_record(&device_surrogate) {
+        let retry_after = state.rate_limiter.retry_after(&device_surrogate);
+        warn!("rate_limit_exceeded");
+        return HttpResponse::TooManyRequests()
+            .insert_header(("Retry-After", retry_after.to_string()))
+            .json(serde_json::json!({"error": "rate limit exceeded", "retry_after_seconds": retry_after}));
+    }
+
+    // ── Feature lookup ─────────────────────────────────────────────────────
+    let config = state.config.read().unwrap();
+    let n_features = config.n_features;
+
     let cached_features = state
         .feature_cache
         .get(&device_surrogate)
         .map(|v| v.clone())
-        .unwrap_or_else(|| vec![0.0; FEATURE_VECTOR_SIZE]);
+        .unwrap_or_else(|| vec![0.0; n_features]);
 
-    let features = normalize_feature_vector(cached_features, payload.amount);
+    let features = normalize_feature_vector(cached_features, payload.amount, n_features);
 
-    // Step C: ONNX inference.
-    let input = match Array2::from_shape_vec((1, FEATURE_VECTOR_SIZE), features) {
-        Ok(arr) => arr,
-        Err(e) => {
-            return HttpResponse::InternalServerError()
-                .body(format!("Failed to build input tensor: {e}"));
-        }
-    };
-
-    let ml_score = {
-        let mut session = match state.session.lock() {
-            Ok(guard) => guard,
-            Err(_) => {
-                return HttpResponse::InternalServerError().body("Session lock poisoned");
-            }
-        };
-
-        let input_tensor = match TensorRef::from_array_view(&input) {
-            Ok(t) => t,
-            Err(e) => {
-                return HttpResponse::InternalServerError()
-                    .body(format!("Failed to create ONNX input tensor: {e}"));
-            }
-        };
-
-        let outputs = match session.run(inputs![input_tensor]) {
-            Ok(result) => result,
-            Err(e) => {
-                return HttpResponse::InternalServerError()
-                    .body(format!("ONNX inference failed: {e}"));
-            }
-        };
-
-        match extract_probability(&outputs) {
-            Ok(v) => v,
-            Err(e) => return HttpResponse::InternalServerError().body(e),
-        }
-    };
-
-    // Step D: Fuse graph agent risk delta (additive, clamped to [0, 1]).
+    // ── Graph topology delta ───────────────────────────────────────────────
     let (graph_delta, graph_reason_str) = state.risk_delta_cache.get(&device_surrogate);
-    let risk_score = (ml_score + graph_delta).clamp(0.0, 1.0);
+
+    // ── Dual ONNX inference + weighted fusion ──────────────────────────────
+    let scored = match state.models.infer(features, &config, graph_delta) {
+        Ok(s) => s,
+        Err(e) => {
+            return HttpResponse::InternalServerError().body(e);
+        }
+    };
+
+    let verdict = compute_verdict(scored.fused_score, config.allow_threshold, config.block_threshold);
+    let tier_str = config.tier.as_str().to_string();
 
     let graph_reason: Option<String> = if graph_delta > 0.0 {
         Some(graph_reason_str)
@@ -193,43 +183,86 @@ async fn inference(
         None
     };
 
-    let verdict = if risk_score < ALLOW_THRESHOLD {
-        "ALLOW"
-    } else if risk_score > BLOCK_THRESHOLD {
-        "BLOCK"
-    } else {
-        "FLAG"
-    }
-    .to_string();
-
-    let response = InferenceResponse {
-        hashed_txn_id,
-        risk_score,
+    info!(
+        "inference verdict={} score={:.4} lgbm={:.4} anomaly={:.4} exec_ms={}",
         verdict,
+        scored.fused_score,
+        scored.lgbm_score,
+        scored.anomaly_score,
+        started.elapsed().as_millis()
+    );
+
+    HttpResponse::Ok().json(InferenceResponse {
+        hashed_txn_id,
+        risk_score: scored.fused_score,
+        lgbm_score: scored.lgbm_score,
+        anomaly_score: scored.anomaly_score,
+        verdict: verdict.to_string(),
         execution_time_ms: started.elapsed().as_millis(),
         graph_reason,
-    };
-
-    HttpResponse::Ok().json(response)
+        tier: tier_str,
+    })
 }
 
+/// POST /update_cache — inject pre-computed feature vector for a device.
+///
+/// Auth: HMAC-SHA256 body signature (VARAKSHA_UPDATE_SECRET env var).
+/// Only available on Cloud and OnPrem tiers.
 async fn update_cache(
+    req: HttpRequest,
     state: web::Data<GatewayState>,
-    payload: web::Json<CacheUpdateRequest>,
+    body: web::Bytes,
 ) -> impl Responder {
+    let secret = match std::env::var("VARAKSHA_UPDATE_SECRET") {
+        Ok(s) if !s.is_empty() => s,
+        _ => {
+            return HttpResponse::ServiceUnavailable()
+                .json(serde_json::json!({"error": "update secret not configured"}));
+        }
+    };
+
+    if !verify_hmac(&secret, &body, &req) {
+        warn!("update_cache_auth_fail");
+        return HttpResponse::Unauthorized()
+            .json(serde_json::json!({"error": "invalid signature"}));
+    }
+
+    let payload: CacheUpdateRequest = match serde_json::from_slice(&body) {
+        Ok(p) => p,
+        Err(e) => {
+            return HttpResponse::BadRequest()
+                .json(serde_json::json!({"error": format!("invalid JSON: {e}")}));
+        }
+    };
+
+    let config = state.config.read().unwrap();
+    let n_features = config.n_features;
+    drop(config);
+
+    // Validate feature vector length.
+    if payload.features.len() != n_features {
+        return HttpResponse::UnprocessableEntity().json(serde_json::json!({
+            "error": format!("expected {} features, got {}", n_features, payload.features.len())
+        }));
+    }
+
+    info!("cache_update accepted");
     state
         .feature_cache
-        .insert(payload.hashed_device_id.clone(), payload.features.clone());
+        .insert(payload.hashed_device_id.clone(), payload.features);
 
     HttpResponse::Ok().json(serde_json::json!({"status": "success"}))
 }
 
+/// POST /graph_update — receive a risk delta from the graph agent.
+///
+/// Auth: HMAC-SHA256 body signature (VARAKSHA_GRAPH_SECRET env var).
+/// Only available on Cloud and OnPrem tiers.
 async fn graph_update(
     req: HttpRequest,
     state: web::Data<GatewayState>,
     body: web::Bytes,
 ) -> impl Responder {
-    // Read HMAC secret from environment. Reject update if secret is not configured.
     let secret = match std::env::var("VARAKSHA_GRAPH_SECRET") {
         Ok(s) if !s.is_empty() => s,
         _ => {
@@ -239,6 +272,7 @@ async fn graph_update(
     };
 
     if !verify_hmac(&secret, &body, &req) {
+        warn!("graph_update_auth_fail");
         return HttpResponse::Unauthorized()
             .json(serde_json::json!({"error": "invalid signature"}));
     }
@@ -252,9 +286,25 @@ async fn graph_update(
     };
 
     let risk_delta = payload.risk_delta.clamp(0.0, 1.0);
-    state
-        .risk_delta_cache
-        .upsert(payload.vpa_hash.clone(), risk_delta, payload.reason.clone(), 300);
+    let audit_reason = format!("graph | {} | delta={:.4}", payload.reason, risk_delta);
+
+    state.risk_delta_cache.upsert(
+        payload.vpa_hash.clone(),
+        risk_delta,
+        payload.reason.clone(),
+        audit_reason,
+    );
+
+    let audit_event = serde_json::json!({
+        "event": "graph_update",
+        "ts": unix_now(),
+        "vpa_hash": payload.vpa_hash,
+        "risk_delta": risk_delta,
+        "reason": payload.reason,
+    });
+    if let Err(e) = audit::append_jsonl(&state.audit_log_path, audit_event) {
+        warn!("audit_log_write_failed event=graph_update err={}", e);
+    }
 
     HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
@@ -264,37 +314,257 @@ async fn graph_update(
     }))
 }
 
-async fn health() -> impl Responder {
-    HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
+/// POST /policy/reload — re-read feature_manifest.json and bank_risk_policy.json from disk.
+///
+/// Auth: HMAC-SHA256 (VARAKSHA_UPDATE_SECRET env var). No restart required.
+/// Used by 04_monthly_risk_analyzer.py after writing bank_risk_policy.json.
+async fn policy_reload(
+    req: HttpRequest,
+    state: web::Data<GatewayState>,
+    body: web::Bytes,
+) -> impl Responder {
+    let secret = match std::env::var("VARAKSHA_UPDATE_SECRET") {
+        Ok(s) if !s.is_empty() => s,
+        _ => {
+            return HttpResponse::ServiceUnavailable()
+                .json(serde_json::json!({"error": "update secret not configured"}));
+        }
+    };
+
+    if !verify_hmac(&secret, &body, &req) {
+        return HttpResponse::Unauthorized()
+            .json(serde_json::json!({"error": "invalid signature"}));
+    }
+
+    match PolicyConfig::load() {
+        Ok(new_config) => {
+            let new_allow = new_config.allow_threshold;
+            let new_block = new_config.block_threshold;
+            *state.config.write().unwrap() = new_config;
+            info!("policy_reload allow={:.4} block={:.4}", new_allow, new_block);
+
+            let audit_event = serde_json::json!({
+                "event": "policy_reload",
+                "ts": unix_now(),
+                "status": "ok",
+                "allow_threshold": new_allow,
+                "block_threshold": new_block,
+            });
+            if let Err(e) = audit::append_jsonl(&state.audit_log_path, audit_event) {
+                warn!("audit_log_write_failed event=policy_reload err={}", e);
+            }
+
+            HttpResponse::Ok().json(serde_json::json!({
+                "status": "reloaded",
+                "allow_threshold": new_allow,
+                "block_threshold": new_block,
+            }))
+        }
+        Err(e) => {
+            warn!("policy_reload_failed err={}", e);
+            let audit_event = serde_json::json!({
+                "event": "policy_reload",
+                "ts": unix_now(),
+                "status": "error",
+                "error": e.to_string(),
+            });
+            if let Err(write_err) = audit::append_jsonl(&state.audit_log_path, audit_event) {
+                warn!("audit_log_write_failed event=policy_reload err={}", write_err);
+            }
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error": format!("reload failed: {e}")}))
+        }
+    }
 }
+
+/// DELETE /erasure/{vpa_hash} — DPDP §12(b) right to erasure.
+///
+/// Auth: X-Varaksha-Api-Key.
+/// Removes the VPA hash from both feature_cache and risk_delta_cache.
+/// Emits an audit log entry for the 5-year RBI retention requirement.
+async fn erasure(
+    req: HttpRequest,
+    state: web::Data<GatewayState>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let api_key = match std::env::var("VARAKSHA_API_KEY") {
+        Ok(k) if !k.is_empty() => k,
+        _ => {
+            return HttpResponse::ServiceUnavailable()
+                .json(serde_json::json!({"error": "API key not configured"}));
+        }
+    };
+    if !verify_api_key(&api_key, &req) {
+        return HttpResponse::Unauthorized()
+            .json(serde_json::json!({"error": "invalid API key"}));
+    }
+
+    let vpa_hash = path.into_inner();
+    let removed_delta = state.risk_delta_cache.remove(&vpa_hash);
+    let removed_feature = state.feature_cache.remove(&vpa_hash).is_some();
+
+    // RBI IT Master Direction §15: structured audit trail, no PII.
+    info!(
+        "erasure_request removed_delta={} removed_feature={} timestamp={}",
+        removed_delta,
+        removed_feature,
+        unix_now()
+    );
+
+    let audit_event = serde_json::json!({
+        "event": "erasure",
+        "ts": unix_now(),
+        "vpa_hash": vpa_hash,
+        "removed_delta": removed_delta,
+        "removed_feature": removed_feature,
+    });
+    if let Err(e) = audit::append_jsonl(&state.audit_log_path, audit_event) {
+        warn!("audit_log_write_failed event=erasure err={}", e);
+    }
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "erased": true,
+        "vpa_hash": vpa_hash,
+        "removed_delta_entry": removed_delta,
+        "removed_feature_entry": removed_feature,
+    }))
+}
+
+/// GET /metrics — internal observability endpoint.
+///
+/// Auth: X-Varaksha-Api-Key. No PII in output.
+async fn metrics(req: HttpRequest, state: web::Data<GatewayState>) -> impl Responder {
+    let api_key = match std::env::var("VARAKSHA_API_KEY") {
+        Ok(k) if !k.is_empty() => k,
+        _ => {
+            return HttpResponse::ServiceUnavailable()
+                .json(serde_json::json!({"error": "API key not configured"}));
+        }
+    };
+    if !verify_api_key(&api_key, &req) {
+        return HttpResponse::Unauthorized()
+            .json(serde_json::json!({"error": "invalid API key"}));
+    }
+
+    let config = state.config.read().unwrap();
+    let m = state.risk_delta_cache.metrics();
+    use std::sync::atomic::Ordering;
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "uptime_seconds": unix_now().saturating_sub(state.started_at),
+        "tier": config.tier.as_str(),
+        "n_features": config.n_features,
+        "active_allow_threshold": config.allow_threshold,
+        "active_block_threshold": config.block_threshold,
+        "lgbm_weight": config.lgbm_weight,
+        "anomaly_weight": config.anomaly_weight,
+        "topology_weight": config.topology_weight,
+        "risk_delta_cache": {
+            "size": state.risk_delta_cache.len(),
+            "hits": m.hits.load(Ordering::Relaxed),
+            "misses": m.misses.load(Ordering::Relaxed),
+            "expired": m.expired.load(Ordering::Relaxed),
+        },
+        "feature_cache_size": state.feature_cache.len(),
+    }))
+}
+
+/// GET /health — liveness check. No auth required.
+async fn health(state: web::Data<GatewayState>) -> impl Responder {
+    let config = state.config.read().unwrap();
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": "ok",
+        "tier": config.tier.as_str(),
+    }))
+}
+
+// ── Startup ───────────────────────────────────────────────────────────────────
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Configure ONNX model path here.
-    // For production, set VARAKSHA_STAGE1_ONNX_PATH via environment/secret config.
-    let model_path = std::env::var("VARAKSHA_STAGE1_ONNX_PATH")
-        .unwrap_or_else(|_| "./varaksha_stage1_sweeper.onnx".to_string());
+    env_logger::init();
 
-    let session = Session::builder()
-        .map_err(|e| std::io::Error::other(format!("ORT builder error: {e}")))?
-        .commit_from_file(&model_path)
-        .map_err(|e| std::io::Error::other(format!("Failed to load ONNX model: {e}")))?;
+    // ── Load config from feature_manifest.json + bank_risk_policy.json ─────
+    let config = PolicyConfig::load().map_err(|e| std::io::Error::other(e))?;
+
+    if config.is_production {
+        let mut missing = Vec::new();
+        if !env_non_empty("VARAKSHA_API_KEY") {
+            missing.push("VARAKSHA_API_KEY");
+        }
+        if !env_non_empty("VARAKSHA_UPDATE_SECRET") {
+            missing.push("VARAKSHA_UPDATE_SECRET");
+        }
+        if config.tier != risk_cache::config::VarakshaTier::Edge && !env_non_empty("VARAKSHA_GRAPH_SECRET") {
+            missing.push("VARAKSHA_GRAPH_SECRET");
+        }
+
+        if !missing.is_empty() {
+            return Err(std::io::Error::other(format!(
+                "Missing required environment variables in production mode: {}",
+                missing.join(", ")
+            )));
+        }
+    }
+
+    info!(
+        "varaksha_gateway_start tier={} n_features={} allow={:.3} block={:.3} models_dir={}",
+        config.tier.as_str(),
+        config.n_features,
+        config.allow_threshold,
+        config.block_threshold,
+        config.models_dir,
+    );
+
+    // ── Load ONNX models ───────────────────────────────────────────────────
+    let models = ModelSessions::load(&config).map_err(|e| std::io::Error::other(e))?;
+
+    info!(
+        "models_loaded lgbm={} if={}",
+        config.lgbm_onnx_path,
+        config.if_onnx_path.as_deref().unwrap_or("none (edge tier)")
+    );
+
+    let tier = config.tier.clone();
+    let cache_ttl = config.cache_ttl_seconds;
+    let rate_max = config.rate_max;
+    let rate_window = config.rate_window_seconds;
+    let bind_addr = config.bind_addr.clone();
+    let audit_log_path = std::env::var("VARAKSHA_AUDIT_LOG_PATH")
+        .unwrap_or_else(|_| "./logs/security_audit.jsonl".to_string());
 
     let state = web::Data::new(GatewayState {
-        session: Mutex::new(session),
+        models: Arc::new(models),
+        config: Arc::new(RwLock::new(config)),
         feature_cache: DashMap::new(),
-        risk_delta_cache: RiskCache::new(),
+        risk_delta_cache: RiskCache::new(cache_ttl),
+        rate_limiter: Arc::new(RateLimiter::new(rate_max, rate_window)),
+        audit_log_path,
+        started_at: unix_now(),
     });
 
+    info!("binding addr={}", bind_addr);
+
     HttpServer::new(move || {
-        App::new()
+        let mut app = App::new()
             .app_data(state.clone())
             .route("/health", web::get().to(health))
-            .route("/update_cache", web::post().to(update_cache))
+            .route("/metrics", web::get().to(metrics))
             .route("/inference", web::post().to(inference))
-            .route("/graph_update", web::post().to(graph_update))
+            .route("/policy/reload", web::post().to(policy_reload))
+            .route("/erasure/{vpa_hash}", web::delete().to(erasure));
+
+        // graph_update and update_cache are disabled on Edge tier.
+        // The graph agent doesn't run on Edge, and features are pre-baked into the SDK.
+        if tier != risk_cache::config::VarakshaTier::Edge {
+            app = app
+                .route("/update_cache", web::post().to(update_cache))
+                .route("/graph_update", web::post().to(graph_update));
+        }
+
+        app
     })
-    .bind(("0.0.0.0", 8080))?
+    .bind(&bind_addr)?
     .run()
     .await
 }
