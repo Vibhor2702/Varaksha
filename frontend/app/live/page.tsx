@@ -1673,9 +1673,9 @@ function GraphNetworkMonitor() {
         risk = fb.risk;
       }
 
-      if (isFraudLabel && verdict === "ALLOW") {
+      if (isFraudLabel && verdict === "ALLOW" && risk < 0.45) {
         verdict = "FLAG";
-        risk = Math.max(risk, 0.72);
+        risk = Math.max(risk, 0.58);
         labelBoost = true;
       }
 
