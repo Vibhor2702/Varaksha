@@ -15,13 +15,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Pre-cache dependencies (layer cache: only rebuild when Cargo files change)
-COPY Cargo.toml Cargo.lock ./
+COPY risk-cache/Cargo.toml risk-cache/Cargo.lock ./
 RUN mkdir -p src && echo 'fn main(){}' > src/main.rs \
     && cargo build --release 2>/dev/null; \
     rm -f target/release/risk-cache target/release/.fingerprint/risk-cache* 2>/dev/null; true
 
 # Compile actual source
-COPY src ./src
+COPY risk-cache/src ./src
 RUN cargo build --release
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
