@@ -269,6 +269,7 @@ def export_models(lgbm: LGBMClassifier, iso: IsolationForest) -> None:
         lgbm.booster_,
         initial_types=[("input", FloatTensorType([None, N_FEATURES]))],
         target_opset=13,
+        zipmap=False,
     )
     with open(LGBM_ONNX_PATH, "wb") as f:
         f.write(lgbm_onnx.SerializeToString())

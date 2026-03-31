@@ -17,7 +17,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 // ── Shared state ──────────────────────────────────────────────────────────────
 
 struct GatewayState {
-    models: Arc<ModelSessions>,
+    models: Arc<RwLock<Option<Arc<ModelSessions>>>>,
     /// Runtime config — reloadable via POST /policy/reload without restart.
     config: Arc<RwLock<PolicyConfig>>,
     /// Device feature cache. Keys are SHA-256 hashed device surrogates only.
@@ -86,6 +86,22 @@ fn env_non_empty(name: &str) -> bool {
     std::env::var(name)
         .map(|v| !v.trim().is_empty())
         .unwrap_or(false)
+}
+
+fn ensure_models_loaded(state: &GatewayState) -> Result<Arc<ModelSessions>, String> {
+    if let Some(existing) = state.models.read().unwrap().as_ref().cloned() {
+        return Ok(existing);
+    }
+
+    let config = state.config.read().unwrap().clone();
+    let loaded = Arc::new(ModelSessions::load(&config)?);
+
+    let mut guard = state.models.write().unwrap();
+    if guard.is_none() {
+        *guard = Some(loaded.clone());
+    }
+
+    Ok(guard.as_ref().cloned().expect("models must be present"))
 }
 
 // ── Feature vector normalization ──────────────────────────────────────────────
@@ -167,7 +183,16 @@ async fn inference(
     let (graph_delta, graph_reason_str) = state.risk_delta_cache.get(&device_surrogate);
 
     // ── Dual ONNX inference + weighted fusion ──────────────────────────────
-    let scored = match state.models.infer(features, &config, graph_delta) {
+    let models = match ensure_models_loaded(&state) {
+        Ok(m) => m,
+        Err(e) => {
+            warn!("inference_model_load_failed err={}", e);
+            return HttpResponse::ServiceUnavailable()
+                .json(serde_json::json!({"error": format!("models not available: {}", e)}));
+        }
+    };
+
+    let scored = match models.infer(features, &config, graph_delta) {
         Ok(s) => s,
         Err(e) => {
             return HttpResponse::InternalServerError().body(e);
@@ -522,21 +547,6 @@ async fn main() -> std::io::Result<()> {
         config.models_dir,
     );
 
-    // ── Load ONNX models ───────────────────────────────────────────────────
-    let models = match ModelSessions::load(&config) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("startup_model_load_failed: {}", e);
-            return Err(std::io::Error::other(e));
-        }
-    };
-
-    info!(
-        "models_loaded lgbm={} if={}",
-        config.lgbm_onnx_path,
-        config.if_onnx_path.as_deref().unwrap_or("none (edge tier)")
-    );
-
     let tier = config.tier.clone();
     let cache_ttl = config.cache_ttl_seconds;
     let rate_max = config.rate_max;
@@ -546,7 +556,7 @@ async fn main() -> std::io::Result<()> {
         .unwrap_or_else(|_| "./logs/security_audit.jsonl".to_string());
 
     let state = web::Data::new(GatewayState {
-        models: Arc::new(models),
+        models: Arc::new(RwLock::new(None)),
         config: Arc::new(RwLock::new(config)),
         feature_cache: DashMap::new(),
         risk_delta_cache: RiskCache::new(cache_ttl),

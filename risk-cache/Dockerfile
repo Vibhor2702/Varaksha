@@ -57,7 +57,6 @@ RUN mkdir -p /app/logs /app/models/optimized
 # Override via Railway environment variables or docker-compose env_file
 ENV RUST_LOG=info
 ENV VARAKSHA_MODELS_DIR=/app/models
-ENV VARAKSHA_BIND_ADDR=0.0.0.0:8080
 ENV VARAKSHA_TIER=cloud
 ENV VARAKSHA_AUDIT_LOG_PATH=/app/logs/security_audit.jsonl
 ENV ORT_DYLIB_PATH=/usr/local/lib/libonnxruntime.so
@@ -68,6 +67,6 @@ ENV LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH}
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -sf http://localhost:8080/health || exit 1
+    CMD curl -sf http://localhost:${PORT:-8080}/health || exit 1
 
 CMD ["/app/risk-cache"]
