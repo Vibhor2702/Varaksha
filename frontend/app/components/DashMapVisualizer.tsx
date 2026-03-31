@@ -8,6 +8,7 @@ interface StreamEvent {
   idx: number;
   kind: EventKind;
   key: string;
+  message: string;
 }
 
 function shortKey(seed: number): string {
@@ -15,13 +16,27 @@ function shortKey(seed: number): string {
   return x.toString(16).padStart(8, "0");
 }
 
-export function useMockCacheStream(tps = 5000, cells = 72 * 26) {
+function eventMessage(kind: EventKind, key: string, seq: number) {
+  const amount = [499, 1200, 4750, 9800, 25000, 65000][seq % 6];
+  const category = ["FOOD", "UTILITY", "ECOM", "TRAVEL", "GAMBLING", "P2P"][seq % 6];
+  const risk = kind === "HIT" ? (0.08 + (seq % 5) * 0.07).toFixed(2) : kind === "MISS" ? (0.52 + (seq % 3) * 0.11).toFixed(2) : "0.91";
+
+  if (kind === "HIT") {
+    return `> CACHE_HIT key=${key} risk=${risk} verdict=ALLOW amount=Rs.${amount} cat=${category} reason=known_behavior`;
+  }
+  if (kind === "MISS") {
+    return `> CACHE_MISS key=${key} risk=${risk} verdict=FLAG amount=Rs.${amount} cat=${category} action=route_to_ml_graph`;
+  }
+  return `> INTERCEPT key=${key} risk=${risk} verdict=BLOCK amount=Rs.${amount} cat=${category} reason=velocity_spike_plus_new_device`;
+}
+
+export function useMockCacheStream(tps = 1200, cells = 72 * 26) {
   const queueRef = useRef<StreamEvent[]>([]);
   const statsRef = useRef({ hit: 0, miss: 0, evict: 0, total: 0 });
   const seqRef = useRef(1);
 
   useEffect(() => {
-    const eventsPerTick = Math.max(1, Math.floor(tps / 60));
+    const eventsPerTick = Math.max(1, Math.floor(tps / 40));
     const timer = setInterval(() => {
       const batch: StreamEvent[] = [];
       for (let i = 0; i < eventsPerTick; i += 1) {
@@ -29,14 +44,15 @@ export function useMockCacheStream(tps = 5000, cells = 72 * 26) {
         const r = (s * 1103515245 + 12345) & 1023;
         const kind: EventKind = r < 790 ? "HIT" : r < 970 ? "MISS" : "EVICT";
         const idx = (s * 48271) % cells;
-        batch.push({ idx, kind, key: shortKey(s) });
+        const key = shortKey(s);
+        batch.push({ idx, kind, key, message: eventMessage(kind, key, s) });
       }
 
       queueRef.current.push(...batch);
       if (queueRef.current.length > 2400) {
         queueRef.current.splice(0, queueRef.current.length - 2400);
       }
-    }, 16);
+    }, 24);
 
     return () => clearInterval(timer);
   }, [cells, tps]);
@@ -48,13 +64,12 @@ export function DashMapVisualizer() {
   const cols = 72;
   const rows = 26;
   const totalCells = cols * rows;
-  const { queueRef, statsRef } = useMockCacheStream(5000, totalCells);
+  const { queueRef, statsRef } = useMockCacheStream(1200, totalCells);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef<Uint8Array>(new Uint8Array(totalCells));
   const kindRef = useRef<Uint8Array>(new Uint8Array(totalCells));
   const logsRef = useRef<string[]>([]);
-
   const [stats, setStats] = useState({ hit: 0, miss: 0, evict: 0, total: 0 });
   const [ticker, setTicker] = useState<string[]>([]);
 
@@ -91,7 +106,7 @@ export function DashMapVisualizer() {
     let raf = 0;
 
     const draw = () => {
-      const batch = queueRef.current.splice(0, Math.min(queueRef.current.length, 220));
+      const batch = queueRef.current.splice(0, Math.min(queueRef.current.length, 140));
 
       for (const ev of batch) {
         stateRef.current[ev.idx] = 8;
@@ -102,8 +117,7 @@ export function DashMapVisualizer() {
         if (ev.kind === "MISS") statsRef.current.miss += 1;
         if (ev.kind === "EVICT") statsRef.current.evict += 1;
 
-        const log = `> MEM_ALLOC: ${ev.key} [${ev.kind}]`;
-        logsRef.current.push(log);
+        logsRef.current.push(ev.message);
       }
 
       if (logsRef.current.length > 140) {
@@ -159,7 +173,7 @@ export function DashMapVisualizer() {
         <span className="font-barlow text-[0.56rem] tracking-[0.28em] uppercase text-cream/45">
           Rust DashMap Live Cam
         </span>
-        <span className="font-courier text-[0.55rem] text-cream/30">~5,000 TPS simulated</span>
+        <span className="font-courier text-[0.55rem] text-cream/30">~1,200 TPS simulated · readable mode</span>
       </div>
 
       <div className="px-4 pt-4 pb-3">

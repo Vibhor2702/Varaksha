@@ -5,6 +5,7 @@ import { CacheVisualizer } from "./CacheVisualizer";
 import { SecurityArena   } from "./SecurityArena";
 import { LegalReport     } from "./LegalReport";
 import { Tier3EdgeSim    } from "../components/Tier3EdgeSim";
+import { DashMapVisualizer } from "../components/DashMapVisualizer";
 import { getApiBaseNormalized } from "../lib/api-config";
 
 // ── Tier type ─────────────────────────────────────────────────────────────────
@@ -14,7 +15,7 @@ type Tier = "cloud" | "enterprise" | "embedded";
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const FEED_INTERVAL_MS  = 2200;   // New transaction injected to feed every N ms
+const FEED_INTERVAL_MS  = 3800;   // Slower cadence for demo readability
 const FEED_MAX_ROWS     = 60;     // Max rows before old ones are pruned
 let streamSeq           = 1;
 
@@ -1894,9 +1895,12 @@ export default function LivePage() {
 
             {/* C | D */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-              <CacheVisualizer />
+              <DashMapVisualizer />
               <SecurityArena />
             </div>
+
+            {/* Cache walkthrough terminal */}
+            <CacheVisualizer />
 
             {/* H full-width — Open Banking Feed */}
             <OpenBankingModule />
