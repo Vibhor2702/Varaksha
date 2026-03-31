@@ -48,7 +48,7 @@ from plaid_adapter import PlaidAdapter
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO"),
+    level=os.getenv("LOG_LEVEL", "INFO").strip().upper(),
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
 logger = logging.getLogger("feed_bridge")
