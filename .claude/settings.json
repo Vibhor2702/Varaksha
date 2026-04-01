@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -c \":*)",
-      "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe phase9_master_ml_cascade.py)"
-    ]
-  }
-}
