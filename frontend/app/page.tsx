@@ -103,11 +103,11 @@ export default function PitchPage() {
     <main className="min-h-screen bg-cream text-ink">
 
       {/* ── Masthead ──────────────────────────────────────────────────────── */}
-      <header className="border-b border-ink/10 px-6 lg:px-12 py-2.5">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
+      <header className="border-b border-ink/10 px-4 sm:px-6 lg:px-12 py-2.5">
+        <div className="max-w-7xl mx-auto flex justify-between items-center gap-2">
 
-          <span className="font-barlow text-[0.62rem] tracking-[0.22em] uppercase text-ink/35">
-            Vol.&thinsp;II &middot; NPCI Hackathon 2026
+          <span className="font-barlow text-[0.55rem] sm:text-[0.62rem] tracking-[0.18em] sm:tracking-[0.22em] uppercase text-ink/35 whitespace-nowrap">
+            NPCI Hackathon 2026
           </span>
 
           {/* Live status dots — hidden on small screens */}
@@ -122,15 +122,15 @@ export default function PitchPage() {
             ))}
           </div>
 
-          <span className="font-barlow text-[0.62rem] tracking-[0.22em] uppercase text-ink/35">
-            Blue Team &middot; UPI Fraud Detection
+          <span className="font-barlow text-[0.55rem] sm:text-[0.62rem] tracking-[0.18em] sm:tracking-[0.22em] uppercase text-ink/35 whitespace-nowrap">
+            Blue Team
           </span>
         </div>
       </header>
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <motion.section
-        className="px-6 lg:px-12 pt-16 lg:pt-24 pb-12 max-w-7xl mx-auto"
+        className="px-4 sm:px-6 lg:px-12 pt-10 sm:pt-16 lg:pt-24 pb-10 sm:pb-12 max-w-7xl mx-auto"
         variants={stagger}
         initial="hidden"
         animate="visible"
@@ -156,24 +156,39 @@ export default function PitchPage() {
         {/* Subheadline */}
         <motion.p
           variants={fadeUp}
-          className="font-playfair italic text-ink/80 mb-10"
+          className="font-playfair italic text-ink/80 mb-6"
           style={{ fontSize: "clamp(1.1rem, 2.4vw, 1.9rem)" }}
         >
           UPI Fraud Defense Network
         </motion.p>
 
+        {/* CTA */}
+        <motion.div variants={fadeUp} className="mb-10 flex flex-wrap items-center gap-3">
+          <a
+            href="/live"
+            className="inline-flex items-center gap-2 bg-saffron text-cream font-barlow font-semibold text-[0.68rem] tracking-[0.16em] uppercase px-5 py-3 shadow-[0_4px_20px_rgba(37,99,235,0.28)] hover:shadow-[0_4px_28px_rgba(37,99,235,0.42)] transition-shadow"
+          >
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-cream/70 animate-pulse" />
+            Open SOC Dashboard
+          </a>
+          <span className="font-barlow text-[0.58rem] tracking-[0.22em] uppercase text-ink/35">
+            Live demo &middot; Railway API
+          </span>
+        </motion.div>
+
         {/* Decorative rule */}
-        <motion.div variants={fadeIn} className="flex items-center gap-4">
-          <div className="w-14 h-[2px] bg-saffron" />
-          <span className="font-barlow text-[0.62rem] tracking-[0.28em] uppercase text-ink/60 font-semibold">
-            Rust &middot; Random Forest &middot; IsolationForest &middot; NetworkX &middot; edge-tts
+        <motion.div variants={fadeIn} className="flex items-center gap-3 sm:gap-4">
+          <div className="w-10 sm:w-14 h-[2px] bg-saffron shrink-0" />
+          <span className="font-barlow text-[0.52rem] sm:text-[0.62rem] tracking-[0.18em] sm:tracking-[0.28em] uppercase text-ink/60 font-semibold">
+            <span className="hidden sm:inline">Rust &middot; Random Forest &middot; IsolationForest &middot; NetworkX &middot; edge-tts</span>
+            <span className="sm:hidden">Rust &middot; RF &middot; NetworkX &middot; TTS</span>
           </span>
           <div className="flex-1 h-px bg-ink/10" />
         </motion.div>
       </motion.section>
 
       {/* ── Metrics Grid ──────────────────────────────────────────────────── */}
-      <section className="px-6 lg:px-12 pb-20 max-w-7xl mx-auto">
+      <section className="px-4 sm:px-6 lg:px-12 pb-14 sm:pb-20 max-w-7xl mx-auto">
 
         {/* Section label */}
         <div className="flex items-center gap-3 mb-5">
@@ -250,7 +265,7 @@ export default function PitchPage() {
 
       {/* ── Mission Statement ─────────────────────────────────────────────── */}
       <motion.section
-        className="px-6 lg:px-12 pb-24 max-w-7xl mx-auto"
+        className="px-4 sm:px-6 lg:px-12 pb-16 sm:pb-24 max-w-7xl mx-auto"
         variants={stagger}
         initial="hidden"
         whileInView="visible"

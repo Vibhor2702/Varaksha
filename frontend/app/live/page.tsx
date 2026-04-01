@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { motion } from "framer-motion";
 import { CacheVisualizer } from "./CacheVisualizer";
 import { SecurityArena   } from "./SecurityArena";
 import { LegalReport     } from "./LegalReport";
@@ -1061,61 +1062,59 @@ function TransactionFeed() {
         </div>
       </div>
 
-      {/* Table header */}
-      <div className="grid grid-cols-[58px_1fr_1fr_72px_72px_56px_64px] gap-2 px-4 py-2 border-b border-cream/[0.05] bg-cream/[0.015] shrink-0">
-        {["Time","Sender","Receiver","Amount","Category","Risk","Verdict"].map((h) => (
-          <span key={h} className="font-barlow text-[0.48rem] tracking-[0.24em] uppercase text-cream/20">
-            {h}
-          </span>
-        ))}
-      </div>
+      {/* Scrollable area — horizontal scroll on mobile */}
+      <div className="overflow-x-auto overflow-y-auto flex-1" style={{ maxHeight: "520px" }}>
+        <div style={{ minWidth: 560 }}>
+          {/* Table header */}
+          <div className="grid grid-cols-[52px_1fr_1fr_68px_64px_52px_60px] gap-2 px-4 py-2 border-b border-cream/[0.05] bg-cream/[0.015] sticky top-0 z-10">
+            {["Time","Sender","Receiver","Amount","Cat","Risk","Verdict"].map((h) => (
+              <span key={h} className="font-barlow text-[0.48rem] tracking-[0.22em] uppercase text-cream/20">
+                {h}
+              </span>
+            ))}
+          </div>
 
-      {/* Scrollable feed body */}
-      <div className="overflow-y-auto flex-1" style={{ maxHeight: "600px" }}>
-        {rows.map((row, i) => (
-          <div
-            key={row.id}
-            className={`grid grid-cols-[58px_1fr_1fr_72px_72px_56px_64px] gap-2 px-4 py-2.5 border-b border-cream/[0.04] hover:bg-cream/[0.03] transition-colors ${
-              i === 0 && !paused ? "bg-cream/[0.025]" : ""
-            }`}
-          >
-              <span className="font-courier text-[0.6rem] text-cream/50 font-semibold tabular-nums">
+          {/* Feed rows */}
+          {rows.map((row, i) => (
+            <div
+              key={row.id}
+              className={`grid grid-cols-[52px_1fr_1fr_68px_64px_52px_60px] gap-2 px-4 py-2.5 border-b border-cream/[0.04] hover:bg-cream/[0.03] transition-colors ${
+                i === 0 && !paused ? "bg-cream/[0.025]" : ""
+              }`}
+            >
+              <span className="font-courier text-[0.58rem] text-cream/50 font-semibold tabular-nums">
                 {row.ts}
               </span>
-              <span className="font-courier text-[0.65rem] text-cream/55 truncate">
+              <span className="font-courier text-[0.62rem] text-cream/55 truncate">
                 {maskVpa(row.sender)}
               </span>
-              <span className="font-courier text-[0.65rem] text-cream/38 truncate">
+              <span className="font-courier text-[0.62rem] text-cream/38 truncate">
                 {maskVpa(row.receiver)}
               </span>
-              <span className="font-courier text-[0.65rem] text-cream/55 tabular-nums">
+              <span className="font-courier text-[0.62rem] text-cream/55 tabular-nums">
                 ₹{row.amount.toLocaleString("en-IN")}
               </span>
-              <span className="font-barlow text-[0.56rem] text-cream/28 truncate">
+              <span className="font-barlow text-[0.54rem] text-cream/28 truncate">
                 {row.merchantCat}
               </span>
 
               {/* Risk bar */}
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <div className="flex-1 h-1 bg-cream/[0.07] overflow-hidden">
-                  <div
-                    className={`h-full ${riskBar(row.riskScore)}`}
-                    style={{ width: `${row.riskScore * 100}%` }}
-                  />
+                  <div className={`h-full ${riskBar(row.riskScore)}`} style={{ width: `${row.riskScore * 100}%` }} />
                 </div>
-                <span className="font-courier text-[0.52rem] text-cream/22 tabular-nums shrink-0">
+                <span className="font-courier text-[0.48rem] text-cream/22 tabular-nums shrink-0">
                   {row.riskScore.toFixed(2)}
                 </span>
               </div>
 
               {/* Verdict badge */}
-              <span
-                className={`font-courier text-[0.56rem] tracking-wider uppercase px-1.5 py-0.5 text-center ${verdictBadge(row.verdict)}`}
-              >
+              <span className={`font-courier text-[0.54rem] tracking-wider uppercase px-1 py-0.5 text-center ${verdictBadge(row.verdict)}`}>
                 {row.verdict}
               </span>
             </div>
           ))}
+        </div>
       </div>
 
       {/* Footer totals bar */}
@@ -1844,7 +1843,7 @@ function GraphNetworkMonitor() {
         ))}
       </div>
 
-      <form onSubmit={handleInject} className="grid grid-cols-1 md:grid-cols-6 gap-2 px-4 py-3 border-b border-cream/[0.06] bg-cream/[0.015]">
+      <form onSubmit={handleInject} className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 px-4 py-3 border-b border-cream/[0.06] bg-cream/[0.015]">
         <input value={manual.sender} onChange={(e) => setManual((m) => ({ ...m, sender: e.target.value }))} className="bg-cream/[0.02] border border-cream/[0.12] px-2 py-2 font-courier text-[0.62rem] text-cream/70" placeholder="sender VPA" />
         <input value={manual.receiver} onChange={(e) => setManual((m) => ({ ...m, receiver: e.target.value }))} className="bg-cream/[0.02] border border-cream/[0.12] px-2 py-2 font-courier text-[0.62rem] text-cream/70" placeholder="receiver VPA" />
         <input value={manual.amount} onChange={(e) => setManual((m) => ({ ...m, amount: e.target.value }))} className="bg-cream/[0.02] border border-cream/[0.12] px-2 py-2 font-courier text-[0.62rem] text-cream/70" placeholder="amount" type="number" />
@@ -1857,11 +1856,11 @@ function GraphNetworkMonitor() {
         <button type="submit" disabled={submitting} className="bg-saffron/90 hover:bg-saffron disabled:opacity-60 text-ink font-barlow text-[0.60rem] tracking-[0.18em] uppercase px-3 py-2">
           {submitting ? "Injecting..." : "Inject Tx"}
         </button>
-        <label className="md:col-span-6 flex items-center gap-2 font-barlow text-[0.56rem] tracking-wide text-cream/40">
+        <label className="col-span-2 sm:col-span-3 md:col-span-6 flex items-center gap-2 font-barlow text-[0.56rem] tracking-wide text-cream/40">
           <input type="checkbox" checked={manual.newDevice} onChange={(e) => setManual((m) => ({ ...m, newDevice: e.target.checked }))} />
           New device risk boost
         </label>
-        {manualError && <p className="md:col-span-6 font-courier text-[0.56rem] text-flag/80">{manualError}</p>}
+        {manualError && <p className="col-span-2 sm:col-span-3 md:col-span-6 font-courier text-[0.56rem] text-flag/80">{manualError}</p>}
       </form>
 
       {lastInjected && (
@@ -1916,7 +1915,7 @@ function GraphNetworkMonitor() {
             <div className="px-3 py-2 border-b border-cream/[0.06]">
               <span className="font-barlow text-[0.50rem] tracking-[0.24em] uppercase text-cream/25">Preview</span>
             </div>
-            <div className="grid grid-cols-4 gap-px bg-cream/[0.06]">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-cream/[0.06]">
               {(datasetRows.length ? datasetRows.slice(0, 6) : []).map((row) => (
                 <div key={row.txId} className="contents">
                   <div className="bg-ink/60 px-3 py-2">
@@ -2334,15 +2333,16 @@ function OpenBankingModule() {
         ))}
       </div>
 
-      {/* Feed table header */}
-      <div className="grid grid-cols-[52px_60px_1fr_1fr_72px_56px_56px_64px] gap-2 px-4 py-2 border-b border-cream/[0.05] bg-cream/[0.015] shrink-0">
-        {["Time","Src","Sender","Receiver","Amount","Cat","Risk","Verdict"].map((h) => (
-          <span key={h} className="font-barlow text-[0.46rem] tracking-[0.22em] uppercase text-cream/20">{h}</span>
-        ))}
-      </div>
+      {/* Feed table — horizontal scroll on mobile */}
+      <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "420px" }}>
+        <div style={{ minWidth: 600 }}>
+        {/* Table header */}
+        <div className="grid grid-cols-[50px_56px_1fr_1fr_68px_52px_52px_60px] gap-2 px-4 py-2 border-b border-cream/[0.05] bg-cream/[0.015] sticky top-0 z-10">
+          {["Time","Src","Sender","Receiver","Amount","Cat","Risk","Verdict"].map((h) => (
+            <span key={h} className="font-barlow text-[0.46rem] tracking-[0.22em] uppercase text-cream/20">{h}</span>
+          ))}
+        </div>
 
-      {/* Feed rows */}
-      <div className="overflow-y-auto" style={{ maxHeight: "420px" }}>
         {rows.length === 0 && (
           <div className="px-5 py-8 text-center font-barlow text-[0.60rem] text-cream/18 tracking-widest uppercase">
             Waiting for open banking stream…
@@ -2351,7 +2351,7 @@ function OpenBankingModule() {
         {rows.map((row, i) => (
           <div
             key={row.id}
-            className={`grid grid-cols-[52px_60px_1fr_1fr_72px_56px_56px_64px] gap-2 px-4 py-2.5 border-b border-cream/[0.04] hover:bg-cream/[0.025] transition-colors ${
+            className={`grid grid-cols-[50px_56px_1fr_1fr_68px_52px_52px_60px] gap-2 px-4 py-2.5 border-b border-cream/[0.04] hover:bg-cream/[0.025] transition-colors ${
               i === 0 ? "bg-cream/[0.02]" : ""
             }`}
           >
@@ -2375,6 +2375,7 @@ function OpenBankingModule() {
             </span>
           </div>
         ))}
+        </div>
       </div>
 
       {/* Footer */}
@@ -2500,37 +2501,35 @@ export default function LivePage() {
       />
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-cream/[0.07] px-5 lg:px-10 py-2.5 bg-ink/95 backdrop-blur-sm">
-        <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-40 border-b border-cream/[0.07] px-4 sm:px-5 lg:px-10 py-2.5 bg-ink/95 backdrop-blur-sm">
+        <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-3">
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <a
               href="/"
-              className="font-barlow text-[0.58rem] tracking-[0.24em] uppercase text-cream/28 hover:text-saffron transition-colors"
+              className="font-barlow text-[0.55rem] sm:text-[0.58rem] tracking-[0.20em] sm:tracking-[0.24em] uppercase text-cream/28 hover:text-saffron transition-colors whitespace-nowrap"
             >
               &larr;&thinsp;Varaksha
             </a>
             <span className="text-cream/10 select-none">|</span>
-            <span className="font-playfair font-bold text-cream text-[1.05rem] tracking-tight">
+            <span className="font-playfair font-bold text-cream text-[0.92rem] sm:text-[1.05rem] tracking-tight whitespace-nowrap">
               SOC Dashboard
             </span>
-            <span className="hidden md:inline font-barlow text-[0.56rem] tracking-[0.22em] uppercase text-cream/22">
+            <span className="hidden lg:inline font-barlow text-[0.56rem] tracking-[0.22em] uppercase text-cream/22">
               &mdash; Security Operations Center
             </span>
           </div>
 
           {/* Status pills */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             {[
               { label: "Gateway",  color: "bg-allow"   },
-              { label: "ML Engine",color: "bg-allow"   },
+              { label: "ML",       color: "bg-allow"   },
               { label: "Graph",    color: "bg-saffron"  },
             ].map((p) => (
               <div key={p.label} className="flex items-center gap-1.5">
-                <span
-                  className={`inline-block w-1.5 h-1.5 rounded-full ${p.color}`}
-                />
-                <span className="hidden sm:inline font-barlow text-[0.52rem] tracking-widest uppercase text-cream/22">
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${p.color}`} />
+                <span className="hidden sm:inline font-barlow text-[0.50rem] tracking-widest uppercase text-cream/22">
                   {p.label}
                 </span>
               </div>
@@ -2541,57 +2540,59 @@ export default function LivePage() {
       </header>
 
       {/* ── Page body ──────────────────────────────────────────────────── */}
-      <div className="max-w-screen-2xl mx-auto px-5 lg:px-10 py-8 space-y-8">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-5 lg:px-10 py-5 sm:py-8 space-y-5 sm:space-y-8">
 
         {/* ── Page title row ── */}
         <div className="flex items-end justify-between mb-2">
           <div>
-            <p className="font-barlow text-[0.62rem] tracking-[0.30em] uppercase text-saffron mb-1.5">
+            <p className="font-barlow text-[0.58rem] sm:text-[0.62rem] tracking-[0.28em] sm:tracking-[0.30em] uppercase text-saffron mb-1.5">
               Varaksha V2 &middot; Real-Time Intelligence
             </p>
             <h1
               className="font-playfair font-bold text-cream leading-tight"
-              style={{ fontSize: "clamp(1.8rem, 3.5vw, 3rem)" }}
+              style={{ fontSize: "clamp(1.5rem, 5vw, 3rem)" }}
             >
               Live Defense Console
             </h1>
           </div>
 
-          <div className="hidden md:flex items-center gap-2 pb-1">
+          <div className="flex items-center gap-2 pb-1">
             <div className="w-1.5 h-1.5 rounded-full bg-saffron animate-pulse" />
-            <span className="font-barlow text-[0.55rem] tracking-[0.28em] uppercase text-cream/22">
+            <span className="hidden sm:inline font-barlow text-[0.52rem] tracking-[0.28em] uppercase text-cream/22">
               Stream Active
             </span>
           </div>
         </div>
 
         {/* ── Tier switcher ─────────────────────────────────────────────── */}
-        <div className="flex items-center gap-1 border border-cream/[0.10] p-1 bg-cream/[0.02] w-fit">
-          {(
-            [
-              { id: "cloud",      label: "Cloud",        sublabel: "Live · Railway API",  dot: "bg-allow"   },
-              { id: "enterprise", label: "Enterprise",   sublabel: "Live · Graph Engine",  dot: "bg-allow"   },
-              { id: "embedded",   label: "Embedded SDK", sublabel: "Simulation",           dot: "bg-saffron" },
-            ] as const
-          ).map(({ id, label, sublabel, dot }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTier(id)}
-              className={`flex flex-col items-start px-4 py-2.5 transition-all duration-200 border ${
-                activeTier === id
-                  ? "bg-cream/[0.08] border-cream/[0.18] shadow-[inset_0_1px_0_rgba(240,244,248,0.08)]"
-                  : "border-transparent hover:bg-cream/[0.04]"
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className={`inline-block w-1.5 h-1.5 rounded-full ${dot} ${activeTier === id ? "animate-pulse" : "opacity-40"}`} />
-                <span className={`font-barlow text-[0.62rem] tracking-[0.18em] uppercase font-semibold ${activeTier === id ? "text-cream" : "text-cream/40"}`}>
-                  {label}
-                </span>
-              </div>
-              <span className="font-courier text-[0.48rem] text-cream/22 pl-3.5">{sublabel}</span>
-            </button>
-          ))}
+        <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 pb-0.5">
+          <div className="flex items-center gap-1 border border-cream/[0.10] p-1 bg-cream/[0.02] w-max min-w-full sm:w-fit sm:min-w-0">
+            {(
+              [
+                { id: "cloud",      label: "Cloud",        sublabel: "Live · Railway API",  dot: "bg-allow"   },
+                { id: "enterprise", label: "Enterprise",   sublabel: "Graph Engine",         dot: "bg-allow"   },
+                { id: "embedded",   label: "Embedded SDK", sublabel: "Simulation",           dot: "bg-saffron" },
+              ] as const
+            ).map(({ id, label, sublabel, dot }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTier(id)}
+                className={`flex flex-col items-start px-3 sm:px-4 py-2 sm:py-2.5 transition-all duration-200 border flex-1 sm:flex-none ${
+                  activeTier === id
+                    ? "bg-cream/[0.08] border-cream/[0.18] shadow-[inset_0_1px_0_rgba(240,244,248,0.08)]"
+                    : "border-transparent hover:bg-cream/[0.04]"
+                }`}
+              >
+                <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5">
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${dot} ${activeTier === id ? "animate-pulse" : "opacity-40"}`} />
+                  <span className={`font-barlow text-[0.58rem] sm:text-[0.62rem] tracking-[0.14em] sm:tracking-[0.18em] uppercase font-semibold whitespace-nowrap ${activeTier === id ? "text-cream" : "text-cream/40"}`}>
+                    {label}
+                  </span>
+                </div>
+                <span className="font-courier text-[0.44rem] sm:text-[0.48rem] text-cream/22 pl-3">{sublabel}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── KPI strip ─────────────────────────────────────────────────── */}
@@ -2609,6 +2610,9 @@ export default function LivePage() {
                 Cloud Tier &mdash; Varaksha Gateway &middot; Hosted on Railway &middot; Live inference via ONNX Runtime
               </span>
             </div>
+
+            {/* Agent Signal Flow — inter-component communication diagram */}
+            <AgentSignalFlow />
 
             {/* Two-column layout: Sandbox | Feed */}
             <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr] gap-6 items-start">
@@ -2650,6 +2654,9 @@ export default function LivePage() {
                 Enterprise Tier &mdash; Graph Engine &middot; NetworkX Topology &middot; Live Transaction Network
               </span>
             </div>
+
+            {/* Agent Signal Flow */}
+            <AgentSignalFlow />
 
             {/* Graph monitor full-width */}
             <GraphNetworkMonitor />
@@ -2719,6 +2726,246 @@ export default function LivePage() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// AGENT SIGNAL FLOW — live inter-component communication diagram
+// Shows Gateway ↔ ML Engine ↔ Graph Agent ↔ Alert Agent signal paths
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ASF_W = 780; const ASF_H = 270;
+
+const ASF_NODES = [
+  { id: "client",  label: "Client App",    sub: "UPI App",         x: 64,  y: 100, r: 26, fill: "rgba(240,244,248,0.07)", stroke: "rgba(240,244,248,0.30)" },
+  { id: "bridge",  label: "Py Bridge",     sub: "/v1/tx",          x: 205, y: 100, r: 26, fill: "rgba(37,99,235,0.10)",   stroke: "rgba(37,99,235,0.40)"   },
+  { id: "gateway", label: "Rust Gateway",  sub: "DashMap · <10ms", x: 395, y: 100, r: 36, fill: "rgba(37,99,235,0.18)",   stroke: "rgba(37,99,235,0.65)"   },
+  { id: "ml",      label: "ML Engine",     sub: "LightGBM · IF",   x: 265, y: 218, r: 25, fill: "rgba(217,119,6,0.12)",   stroke: "rgba(217,119,6,0.45)"   },
+  { id: "cache",   label: "Risk Cache",    sub: "DashMap",         x: 395, y: 228, r: 21, fill: "rgba(37,99,235,0.10)",   stroke: "rgba(37,99,235,0.28)"   },
+  { id: "graph",   label: "Graph Agent",   sub: "NetworkX",        x: 525, y: 218, r: 25, fill: "rgba(13,122,95,0.12)",   stroke: "rgba(13,122,95,0.45)"   },
+  { id: "alert",   label: "Alert Agent",   sub: "TTS · hi-IN",     x: 660, y: 100, r: 25, fill: "rgba(192,57,43,0.12)",   stroke: "rgba(192,57,43,0.45)"   },
+] as const;
+
+type AsfNodeId = typeof ASF_NODES[number]["id"];
+
+const ASF_NODE_MAP = Object.fromEntries(ASF_NODES.map(n => [n.id, n])) as Record<AsfNodeId, typeof ASF_NODES[number]>;
+
+const ASF_EDGES = [
+  { key: "c-b",  from: "client"  as AsfNodeId, to: "bridge"  as AsfNodeId, label: "POST /v1/tx"       },
+  { key: "b-g",  from: "bridge"  as AsfNodeId, to: "gateway" as AsfNodeId, label: "HMAC · /inference" },
+  { key: "g-m",  from: "gateway" as AsfNodeId, to: "ml"      as AsfNodeId, label: "24-feature vec"    },
+  { key: "m-g",  from: "ml"      as AsfNodeId, to: "gateway" as AsfNodeId, label: "fused_score"       },
+  { key: "g-c",  from: "gateway" as AsfNodeId, to: "cache"   as AsfNodeId, label: "WRITE delta"       },
+  { key: "c-g",  from: "cache"   as AsfNodeId, to: "gateway" as AsfNodeId, label: "READ hit"          },
+  { key: "g-gr", from: "gateway" as AsfNodeId, to: "graph"   as AsfNodeId, label: "topology scan"     },
+  { key: "gr-g", from: "graph"   as AsfNodeId, to: "gateway" as AsfNodeId, label: "risk_delta"        },
+  { key: "g-a",  from: "gateway" as AsfNodeId, to: "alert"   as AsfNodeId, label: "FLAG/BLOCK verdict" },
+] as const;
+
+type AsfEdgeKey = typeof ASF_EDGES[number]["key"];
+
+interface AsfPacket { id: number; ekey: AsfEdgeKey; t: number; color: string; speed: number; }
+interface AsfLogEntry { id: number; ts: string; from: string; to: string; label: string; color: string; }
+
+let _asfPkt = 0;
+let _asfLog = 0;
+
+function AgentSignalFlow() {
+  const [packets, setPackets] = useState<AsfPacket[]>([]);
+  const [log, setLog] = useState<AsfLogEntry[]>([]);
+
+  const addSignal = useCallback((ekey: AsfEdgeKey, color: string) => {
+    const edge = ASF_EDGES.find(e => e.key === ekey);
+    if (!edge) return;
+    const fromNode = ASF_NODE_MAP[edge.from];
+    const toNode   = ASF_NODE_MAP[edge.to];
+    setPackets(prev => [...prev.slice(-30), {
+      id: ++_asfPkt, ekey, t: 0, color, speed: 0.016 + Math.random() * 0.006,
+    }]);
+    setLog(prev => [{
+      id: ++_asfLog,
+      ts: new Date().toTimeString().slice(0, 8),
+      from: fromNode.label,
+      to:   toNode.label,
+      label: edge.label,
+      color,
+    }, ...prev].slice(0, 12));
+  }, []);
+
+  const fireTransaction = useCallback((verdict: Verdict) => {
+    const isFlag  = verdict === "FLAG"  || verdict === "BLOCK";
+    const isBlock = verdict === "BLOCK";
+    const sched: [AsfEdgeKey, string, number][] = [
+      ["c-b",  "#2563EB", 0],
+      ["b-g",  "#2563EB", 340],
+      ["g-m",  "#D97706", 680],
+      ["m-g",  "#D97706", 980],
+      ["g-c",  "#2563EB", 1260],
+    ];
+    if (isFlag) {
+      sched.push(["g-gr", "#0D7A5F", 1050]);
+      sched.push(["gr-g", isBlock ? "#C0392B" : "#D97706", 1480]);
+      sched.push(["g-a",  "#C0392B", 1780]);
+    }
+    sched.forEach(([ek, col, delay]) => setTimeout(() => addSignal(ek, col), delay));
+  }, [addSignal]);
+
+  // Advance packet positions
+  useEffect(() => {
+    const t = setInterval(() => {
+      setPackets(prev => prev.map(p => ({ ...p, t: p.t + p.speed })).filter(p => p.t < 1.0));
+    }, 50);
+    return () => clearInterval(t);
+  }, []);
+
+  // Auto-fire to keep diagram alive
+  useEffect(() => {
+    setTimeout(() => fireTransaction("ALLOW"), 600);
+    setTimeout(() => fireTransaction("FLAG"),  2200);
+    setTimeout(() => fireTransaction("ALLOW"), 3800);
+    const t = setInterval(() => {
+      const r = Math.random();
+      fireTransaction(r < 0.07 ? "BLOCK" : r < 0.22 ? "FLAG" : "ALLOW");
+    }, 3600);
+    return () => clearInterval(t);
+  }, [fireTransaction]);
+
+  // Respond to real incidents from IntelSandbox / TransactionFeed
+  useEffect(() => {
+    const handler = (e: Event) => fireTransaction((e as CustomEvent).detail.verdict);
+    window.addEventListener("varaksha:incident", handler);
+    return () => window.removeEventListener("varaksha:incident", handler);
+  }, [fireTransaction]);
+
+  // Unique visual lines (one per node-pair regardless of direction)
+  const lineSet = new Set<string>();
+  const uniqueLines = ASF_EDGES.filter(e => {
+    const key = [e.from, e.to].sort().join("-");
+    if (lineSet.has(key)) return false;
+    lineSet.add(key);
+    return true;
+  });
+
+  return (
+    <section className="border border-cream/[0.08] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-cream/[0.07] bg-cream/[0.025]">
+        <div className="flex items-center gap-2.5">
+          <motion.span
+            className="inline-block w-1.5 h-1.5 rounded-full bg-saffron shrink-0"
+            animate={{ opacity: [1, 0.25, 1] }}
+            transition={{ duration: 1.4, repeat: Infinity }}
+          />
+          <span className="font-barlow text-[0.52rem] sm:text-[0.57rem] tracking-[0.24em] sm:tracking-[0.30em] uppercase text-cream/40">
+            Agent Signal Bus &mdash; Live inter-component communication
+          </span>
+        </div>
+        <span className="hidden sm:inline font-courier text-[0.52rem] text-cream/18">
+          7 nodes &middot; 9 signal paths
+        </span>
+      </div>
+
+      {/* Body */}
+      <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr]">
+
+        {/* SVG topology */}
+        <div className="border-b xl:border-b-0 xl:border-r border-cream/[0.06] p-3 sm:p-4">
+          <svg viewBox={`0 0 ${ASF_W} ${ASF_H}`} className="w-full" style={{ maxHeight: 220 }}>
+            {/* Static edge lines */}
+            {uniqueLines.map(edge => {
+              const a = ASF_NODE_MAP[edge.from]; const b = ASF_NODE_MAP[edge.to];
+              return <line key={`ln-${edge.key}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(240,244,248,0.07)" strokeWidth={1.2} strokeDasharray="5 4" />;
+            })}
+
+            {/* Animated packets */}
+            {packets.map(p => {
+              const edge = ASF_EDGES.find(e => e.key === p.ekey);
+              if (!edge) return null;
+              const a = ASF_NODE_MAP[edge.from]; const b = ASF_NODE_MAP[edge.to];
+              const cx = a.x + (b.x - a.x) * p.t;
+              const cy = a.y + (b.y - a.y) * p.t;
+              return (
+                <g key={p.id}>
+                  <circle cx={cx} cy={cy} r={4.5} fill={p.color} opacity={0.85} />
+                  <circle cx={cx} cy={cy} r={8}   fill={p.color} opacity={0.12} />
+                </g>
+              );
+            })}
+
+            {/* Edge signal labels (midpoint, subtle) */}
+            {ASF_EDGES.map(edge => {
+              const a = ASF_NODE_MAP[edge.from]; const b = ASF_NODE_MAP[edge.to];
+              const mx = (a.x + b.x) / 2; const my = (a.y + b.y) / 2 - 7;
+              return (
+                <text key={`el-${edge.key}`} x={mx} y={my} textAnchor="middle"
+                  fill="rgba(240,244,248,0.15)" fontSize={5.5} fontFamily="monospace">
+                  {edge.label}
+                </text>
+              );
+            })}
+
+            {/* Nodes */}
+            {ASF_NODES.map(n => (
+              <g key={n.id}>
+                {/* Glow ring for gateway */}
+                {n.id === "gateway" && (
+                  <circle cx={n.x} cy={n.y} r={n.r + 8} fill="rgba(37,99,235,0.06)" stroke="rgba(37,99,235,0.12)" strokeWidth={1} />
+                )}
+                <circle cx={n.x} cy={n.y} r={n.r} fill={n.fill} stroke={n.stroke} strokeWidth={1.5} />
+                <text x={n.x} y={n.y - 3} textAnchor="middle"
+                  fill="rgba(240,244,248,0.82)" fontSize={n.id === "gateway" ? 8.5 : 7.5}
+                  fontWeight="700" fontFamily="monospace">
+                  {n.label}
+                </text>
+                <text x={n.x} y={n.y + 10} textAnchor="middle"
+                  fill="rgba(240,244,248,0.28)" fontSize={6} fontFamily="monospace">
+                  {n.sub}
+                </text>
+                {/* Live dot on gateway */}
+                {n.id === "gateway" && (
+                  <circle cx={n.x + n.r - 5} cy={n.y - n.r + 5} r={3.5} fill="#0D7A5F" />
+                )}
+              </g>
+            ))}
+
+            {/* Legend */}
+            {[
+              { color: "#2563EB", label: "Gateway/Bridge" },
+              { color: "#D97706", label: "ML Engine"      },
+              { color: "#0D7A5F", label: "Graph Agent"    },
+              { color: "#C0392B", label: "Alert (FLAG/BLOCK)" },
+            ].map((l, i) => (
+              <g key={l.label} transform={`translate(${10 + i * 185}, ${ASF_H - 16})`}>
+                <circle r={3} fill={l.color} />
+                <text x={7} y={4} fill="rgba(240,244,248,0.25)" fontSize={6} fontFamily="monospace">{l.label}</text>
+              </g>
+            ))}
+          </svg>
+        </div>
+
+        {/* Signal log */}
+        <div className="p-3 sm:p-4 flex flex-col">
+          <p className="font-barlow text-[0.50rem] tracking-[0.26em] uppercase text-cream/22 mb-3 shrink-0">
+            Live Signal Log
+          </p>
+          <div className="space-y-1.5 overflow-hidden flex-1">
+            {log.length === 0 && (
+              <p className="font-courier text-[0.58rem] text-cream/18">Awaiting signals…</p>
+            )}
+            {log.map((s, i) => (
+              <div key={s.id} className="flex items-start gap-2" style={{ opacity: 1 - i * 0.07 }}>
+                <span className="font-courier text-[0.50rem] text-cream/20 shrink-0 tabular-nums mt-px">{s.ts}</span>
+                <span className="font-courier text-[0.54rem] shrink-0 font-semibold" style={{ color: s.color }}>
+                  {s.from.slice(0, 10)}→{s.to.slice(0, 9)}
+                </span>
+                <span className="font-barlow text-[0.54rem] text-cream/38 truncate">{s.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // KPI STRIP — top-of-page 4-metric summary cards
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2754,19 +3001,19 @@ function KpiStrip() {
   };
 
   return (
-    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
       {KPI_DEFS.map((k) => (
         <div
           key={k.label}
-          className={`border ${k.border} bg-cream/[0.025] px-4 py-4 flex flex-col gap-1`}
+          className={`border ${k.border} bg-cream/[0.025] px-3 sm:px-4 py-3 sm:py-4 flex flex-col gap-1`}
         >
-          <span className="font-barlow text-[0.52rem] tracking-[0.26em] uppercase text-cream/22">
+          <span className="font-barlow text-[0.48rem] sm:text-[0.52rem] tracking-[0.22em] sm:tracking-[0.26em] uppercase text-cream/22">
             {k.label}
           </span>
           <span
             key={displayVal(k.key)}
             className={`font-courier font-bold leading-none ${k.color}`}
-            style={{ fontSize: "clamp(1.6rem, 2.8vw, 2.4rem)" }}
+            style={{ fontSize: "clamp(1.4rem, 5vw, 2.4rem)" }}
           >
             {displayVal(k.key)}
           </span>
